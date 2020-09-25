@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import seaborn as sns
 import os
 import libpysal
@@ -9,6 +10,7 @@ from libpysal.weights import Queen, Rook
 import geopandas
 
 from scipy.spatial import Voronoi
+from sklearn.neighbors import BallTree
 
 def make_simple_coords():
     """
@@ -79,90 +81,130 @@ def build_voronoi(coords, trim_dist='percentile', trim_param=0.5, return_dist=Fa
         pairs = pairs[dist < trim_dist, :]
     return pairs
 
-# from https://stackoverflow.com/a/50029441
-from matplotlib.collections import LineCollection
-def multiline(xs, ys, c, ax=None, **kwargs):
-    """Plot lines with different colorings
+def pairs_from_NN(ind):
+    """
+    Convert a matrix of Neirest Neighbors indices into 
+    a matrix of unique pairs of neighbors
 
     Parameters
     ----------
-    xs : iterable container of x coordinates
-    ys : iterable container of y coordinates
-    c : iterable container of numbers mapped to colormap
-    ax (optional): Axes to plot on.
-    kwargs (optional): passed to LineCollection
-
-    Notes:
-        len(xs) == len(ys) == len(c) is the number of line segments
-        len(xs[i]) == len(ys[i]) is the number of points for each line (indexed by i)
+    ind : ndarray
+        The (n_objects x n_neighbors) matrix of neighbors indices.
 
     Returns
     -------
-    lc : LineCollection instance.
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices.
+
     """
+    
+    NN = ind.shape[1]
+    source_nodes = np.repeat(ind[:,0], NN-1).reshape(-1,1)
+    target_nodes = ind[:,1:].reshape(-1,1)
+    pairs = np.hstack((source_nodes, target_nodes))
+    pairs = np.sort(pairs, axis=1)
+    pairs = np.unique(pairs, axis=0)
+    return pairs
 
-    # find axes
-    ax = plt.gca() if ax is None else ax
+def build_NN(coords, k=6, **kwargs):
+    tree = BallTree(coords, **kwargs)
+    _, ind = tree.query(coords, k=k)
+    pairs = pairs_from_NN(ind)
+    return pairs
 
-    # create LineCollection
-    segments = [np.column_stack([x, y]) for x, y in zip(xs, ys)]
-    lc = LineCollection(segments, **kwargs)
-
-    # set coloring of line segments
-    #    Note: I get an error if I pass c as a list here... not sure why.
-    lc.set_array(np.asarray(c))
-
-    # add lines to axes and rescale 
-    #    Note: adding a collection doesn't autoscalee xlim/ylim
-    ax.add_collection(lc)
-    ax.autoscale()
-    return lc
+def build_within_radius(coords, r, **kwargs):
+    tree = BallTree(coords, **kwargs)
+    ind = tree.query_radius(coords, r=r)
+    # clean arrays of neighbors from self referencing neighbors
+    # and aggregate at the same time
+    source_nodes = []
+    target_nodes = []
+    for i, arr in enumerate(ind):
+        neigh = arr[arr != i]
+        source_nodes.append([i]*(neigh.size))
+        target_nodes.append(neigh)
+    # flatten arrays of arrays
+    import itertools
+    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
+    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
+    # remove duplicate pairs
+    pairs = np.hstack((source_nodes, target_nodes))
+    pairs = np.sort(pairs, axis=1)
+    pairs = np.unique(pairs, axis=0)
+    return pairs
 
 def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
-                 size_nodes=None, col_edges='k', alpha_edges=0.5, aspect=None, **kwargs):
+                 size_nodes=None, col_edges='k', alpha_edges=0.5, ax=None, 
+                 aspect='equal', **kwargs):
     """
     **kwargs: labels of nodes
     """
-    fig, ax = plt.subplots(figsize=figsize)
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
     # plot nodes
     ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     for pair in pairs[:,:]:
         [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=0, alpha=alpha_edges)
-    plt.legend()
+        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges)
     if aspect is not None:
         ax.set_aspect(aspect)
 
-# def plot_network_big(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
-#                  size_nodes=None, col_edges='k', alpha_edges=0.5, aspect=None, **kwargs):
-#     """
-#     **kwargs: labels of nodes
-#     """
-#     fig, ax = plt.subplots(figsize=figsize)
-#     # plot nodes
-#     ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
-#     # plot edges
-#     # obtain 3D array of ([[x0, y0], [x1, y1]])
-#     coord_pairs = coords[pairs]
+def rescale(data, perc_mini=1, perc_maxi=99, 
+            out_mini=0, out_maxi=1, 
+            cutoff_mini=True, cutoff_maxi=True, 
+            return_extrema=False):
+    """
+    Normalize the intensities of a planar 2D image.
+
+    Parameters
+    ----------
+    data : numpy array
+        the matrix to process
+    perc_mini : float
+        the low input level to set to the low output level
+    perc_maxi : float
+        the high input level to set to the high output level
+    out_mini : int or float
+        the low output level
+    out_maxi : int or float
+        the high output level
+    cutoff_mini : bool
+        if True sets final values below the low output level to the low output level
+    cutoff_maxi : bool
+        if True sets final values above the high output level to the high output level
+    return_extrema : bool
+        if True minimum and maximum percentiles of original data are also returned
+
+    Returns
+    -------
+    data_out : numpy array
+        the output image
+    """
     
-#     multiline(coords[:,0], coords[:,0], c=np.zeros(pairs.shape[0]), ax=ax, 
-#               zorder=0, alpha=alpha_edges, **kwargs)
-#     for pair in pairs[:,:]:
-#         [x0, y0], [x1, y1] = coords[pair]
-#         ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=0, alpha=alpha_edges)
-#     plt.legend()
-#     if aspect is not None:
-#         ax.set_aspect(aspect)
-
-
-# check this out too
-# https://matplotlib.org/gallery/shapes_and_collections/line_collection.html#sphx-glr-gallery-shapes-and-collections-line-collection-py
+    mini = np.percentile(data, perc_mini)
+    maxi = np.percentile(data, perc_maxi)
+    if out_mini is None:
+        out_mini = mini
+    if out_maxi is None:
+        out_maxi = maxi
+    data_out = data - mini
+    data_out = data_out * (out_maxi-out_mini) / (maxi-mini)
+    data_out = data_out + out_mini
+    if cutoff_mini:
+        data_out[data_out<out_mini] = out_mini
+    if cutoff_maxi:
+        data_out[data_out>out_maxi] = out_maxi
+    if return_extrema:
+        return data_out, mini, maxi
+    else:
+        return data_out
 
 def plot_network_distances(coords, pairs, distances,  
                            col_nodes=None, marker=None, size_nodes=None, 
                            cmap_edges='viridis', alpha_edges=0.7, 
-                           figsize=(15, 15), aspect=None, **kwargs):
+                           figsize=(15, 15), ax=None, aspect='equal', **kwargs):
     """
     Plot a network with edges colored by their length.
 
@@ -196,18 +238,38 @@ def plot_network_distances(coords, pairs, distances,
     None.
 
     """
-
-    fig, ax = plt.subplots(figsize=figsize)
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
     # plot nodes
     ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
-    scaled_dist = distances / distances.max()
+    scaled_dist, min_dist, max_dist = rescale(distances, return_extrema=True)
+    cmap = mpl.cm.viridis
+    norm = mpl.colors.Normalize(vmin=min_dist, vmax=max_dist)
     for pair, dist in zip(pairs[:,:], scaled_dist):
         [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=plt.cm.viridis(dist), zorder=0, alpha=alpha_edges)
-    plt.colorbar()
+        ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges)
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+             orientation='vertical', label='Distance')
+    # TODO: plot many lines more efficiently check
+    # from https://stackoverflow.com/a/50029441
+    # https://matplotlib.org/gallery/shapes_and_collections/line_collection.html#sphx-glr-gallery-shapes-and-collections-line-collection-py
+    
     if aspect is not None:
         ax.set_aspect(aspect)
+
+def showim(image, figsize=(9,9), ax=None, **kwargs):
+    if ax is None:
+        return_ax = True
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        return_ax = False
+    ax.imshow(image, **kwargs)
+    ax.axis('off')
+    ax.figure.tight_layout()
+    if return_ax:
+        return fig, ax
 
 ###### TODO ######
 
@@ -216,12 +278,13 @@ def plot_network_distances(coords, pairs, distances,
 #   - knn
 #   - distance sphere
 #   - TDA based?
-#   - Voronoi
+#   - Voronoi: OK
 #   - Gabriel
 
 # plots to find distance threshold:
-#     - static
+#     - static: OK
 #     - interactive with cursor for maw distance and color pops when edge is discarded
+# plots to find appropriate number of neighbors
 
 # Examples and benchmarks with:
 #     - very small network
