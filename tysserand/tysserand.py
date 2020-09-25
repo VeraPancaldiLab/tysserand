@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 import os
+import itertools
 import libpysal
 from libpysal.cg.voronoi  import voronoi, voronoi_frames
 from libpysal.weights import Queen, Rook
@@ -11,6 +12,8 @@ import geopandas
 
 from scipy.spatial import Voronoi
 from sklearn.neighbors import BallTree
+from skimage import morphology, feature, measure, segmentation, filters, color
+from scipy import ndimage as ndi
 
 def make_simple_coords():
     """
@@ -124,7 +127,6 @@ def build_within_radius(coords, r, **kwargs):
         source_nodes.append([i]*(neigh.size))
         target_nodes.append(neigh)
     # flatten arrays of arrays
-    import itertools
     source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
     target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
     # remove duplicate pairs
@@ -132,6 +134,78 @@ def build_within_radius(coords, r, **kwargs):
     pairs = np.sort(pairs, axis=1)
     pairs = np.unique(pairs, axis=0)
     return pairs
+
+def find_neighbors(masks, i, r=1):
+    """
+    Find the neighbors of a given mask.
+    
+    Parameters
+    ----------
+    masks : array_like
+        2D array of integers defining the identity of masks
+        0 is background (no object detected)
+    i : int
+        The mask for which we look for the neighbors.
+    r : int
+        Radius of search.
+        
+    Returns
+    -------
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices.
+    """
+    
+    mask = masks == i
+    # create the border in which we'll look at other masks
+    if r == 1:
+        selem = morphology.square(3)
+    else:
+        selem = morphology.disk(r)
+    dilated = morphology.dilation(mask, selem)
+    border = np.logical_xor(mask, dilated)
+    # detect potential touching masks
+    neighbors = np.unique(masks[border])
+    # if there is only background
+#     if neighbors.size == 1:
+#         return False
+#     else:
+#         return neighbors[neighbors != 0]
+    return neighbors[neighbors != 0]
+
+def build_contacting(masks, r=1):
+    """
+    Build a network from segmented regions that contact each other or are 
+    within a given distance from each other.
+
+    Parameters
+    ----------
+    masks : array_like
+        2D array of integers defining the identity of masks
+        0 is background (no object detected)
+    r : int
+        Radius of search.
+
+    Returns
+    -------
+    pairs : TYPE
+        DESCRIPTION.
+
+    """
+    source_nodes = []
+    target_nodes = []
+    for i in range(1, masks.max()+1):
+        neigh = find_neighbors(masks, i, r=r)
+        source_nodes.append([i]*(neigh.size))
+        target_nodes.append(neigh)
+    # flatten arrays of arrays
+    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
+    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
+    # remove duplicate pairs
+    pairs = np.hstack((source_nodes, target_nodes))
+    pairs = np.sort(pairs, axis=1)
+    pairs = np.unique(pairs, axis=0)
+    return pairs
+        
 
 def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
                  size_nodes=None, col_edges='k', alpha_edges=0.5, ax=None, 
@@ -260,6 +334,27 @@ def plot_network_distances(coords, pairs, distances,
         ax.set_aspect(aspect)
 
 def showim(image, figsize=(9,9), ax=None, **kwargs):
+    """
+    Displays an image with thigh layout and without axes.
+
+    Parameters
+    ----------
+    image : ndarray
+        A 1 or 3 channels images.
+    figsize : TYPE, optional
+        DESCRIPTION. The default is (9,9).
+    ax : TYPE, optional
+        DESCRIPTION. The default is None.
+    **kwargs : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    fig : TYPE
+        DESCRIPTION.
+    ax : TYPE
+        DESCRIPTION.
+    """
     if ax is None:
         return_ax = True
         fig, ax = plt.subplots(figsize=figsize)
@@ -275,8 +370,8 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
 
 # methods to construct networks:
 #   - contact (segmented images, ...)
-#   - knn
-#   - distance sphere
+#   - knn: OK
+#   - within radius: OK
 #   - TDA based?
 #   - Voronoi: OK
 #   - Gabriel

@@ -126,3 +126,50 @@ plot_network(coords, pairs, col_nodes=colors, col_edges='w', ax=ax)
 # are some areas with few edges and other areaas with (too) many edges
 
 
+#%% Contacting regions
+
+# With simple artifical data
+W = 100
+H = 100
+
+coords = np.array([[15, 25],
+                   [35, 25],
+                   [55, 25],
+                   [35, 45]])
+
+binary_im = np.full((H, W), False)
+r = 10
+for a, b in coords:
+    y, x = np.ogrid[-a:H-a, -b:W-b]
+    circle = x*x + y*y <= r*r
+    binary_im[circle] = True
+
+distance = ndi.distance_transform_edt(binary_im)
+local_maxi = feature.peak_local_max(distance, indices=False,
+                                    min_distance=5)
+markers = measure.label(local_maxi)
+masks = segmentation.watershed(-distance, markers, mask=binary_im)
+showim(masks)
+
+pairs = build_contacting(masks)-1
+distances = distance_neighbors(coords, pairs)
+plot_network_distances(coords, pairs, distances)
+
+
+# With nuclei image
+img = plt.imread("../data/mIF_WSI_tile/nuclei_grey.png")
+
+thresholds = filters.threshold_multiotsu(img, classes=3)
+# regions = np.digitize(img, bins=thresholds)
+binary_im = img > thresholds[0]
+showim(binarized)
+distance = ndi.distance_transform_edt(binary_im)
+local_maxi = feature.peak_local_max(distance, indices=False,
+                                    min_distance=5)
+markers = measure.label(local_maxi)
+masks = segmentation.watershed(-distance, markers, mask=binary_im)
+showim(color.label2rgb(masks, bg_label=0))
+
+pairs = build_contacting(masks)-1
+distances = distance_neighbors(coords, pairs)
+plot_network_distances(coords, pairs, distances)
