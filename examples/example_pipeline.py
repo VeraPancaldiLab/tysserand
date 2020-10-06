@@ -162,7 +162,7 @@ img = plt.imread("../data/mIF_WSI_tile/nuclei_grey.png")
 thresholds = filters.threshold_multiotsu(img, classes=3)
 # regions = np.digitize(img, bins=thresholds)
 binary_im = img > thresholds[0]
-showim(binarized)
+showim(binary_im)
 distance = ndi.distance_transform_edt(binary_im)
 local_maxi = feature.peak_local_max(distance, indices=False,
                                     min_distance=5)
