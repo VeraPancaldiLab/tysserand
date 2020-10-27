@@ -128,20 +128,26 @@ plot_network(coords, pairs, col_nodes=colors, col_edges='w', ax=ax)
 
 #%% Contacting regions
 
+# labels colormap
+label_cmap = mpl.cm.get_cmap('Set2')(range(8))
+
 # With simple artifical data
 W = 100
 H = 100
+r = 10
 
 coords = np.array([[15, 25],
                    [35, 25],
                    [55, 25],
-                   [35, 45]])
+                   [35, 45],
+                   [80, 25],
+                   [80, 47],
+                   [80, 70]])
 
 binary_im = np.full((H, W), False)
-r = 10
-for a, b in coords:
-    y, x = np.ogrid[-a:H-a, -b:W-b]
-    circle = x*x + y*y <= r*r
+for x, y in coords:
+    yy, xx = np.ogrid[-y:H-y, -x:W-x]
+    circle = xx*xx + yy*yy <= r*r
     binary_im[circle] = True
 
 distance = ndi.distance_transform_edt(binary_im)
@@ -149,11 +155,12 @@ local_maxi = feature.peak_local_max(distance, indices=False,
                                     min_distance=5)
 markers = measure.label(local_maxi)
 masks = segmentation.watershed(-distance, markers, mask=binary_im)
-showim(masks)
+showim(color.label2rgb(masks, bg_label=0, colors=label_cmap), origin='lower')
+showim(masks, origin='lower')
 
 pairs = build_contacting(masks)-1
 distances = distance_neighbors(coords, pairs)
-plot_network_distances(coords, pairs, distances)
+plot_network_distances(coords, pairs, distances, aspect='equal')
 
 
 # With nuclei image

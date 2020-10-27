@@ -369,20 +369,23 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
 ###### TODO ######
 
 # methods to construct networks:
-#   - contact (segmented images, ...)
+#   - Voronoi: OK
 #   - knn: OK
 #   - within radius: OK
-#   - TDA based?
-#   - Voronoi: OK
+#   - contact (segmented images, ...)
 #   - Gabriel
+#   - TDA based?
 
 # plots to find distance threshold:
 #     - static: OK
 #     - interactive with cursor for maw distance and color pops when edge is discarded
 # plots to find appropriate number of neighbors
 
+# for big images, zoom arround longest edges
+
 # Examples and benchmarks with:
 #     - very small network
 #     - tile from WSI
 #     - WSI data 
 #       (/home/alexis/Projects/Image_to_Network/data/raw/WSI/conversion/converted)
+#     - random dots, choose data size
