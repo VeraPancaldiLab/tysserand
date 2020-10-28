@@ -30,9 +30,30 @@ def make_simple_coords():
     coords = np.vstack((x,y)).T
     return coords
 
-def distance_neighbors(coords, pairs, **kwargs):
+def make_random_nodes(size=100, ndim=2):
+    """
+    Make a random set of nodes
+
+    Parameters
+    ----------
+    size : int, optional
+        Number of nodes. The default is 100.
+    ndim : int, optional
+        Number of dimensions. The default is 2.
+
+    Returns
+    -------
+    coords : ndarray
+        Coordinates of the set of nodes.
+    """
+    
+    coords = np.random.random(size=size*ndim).reshape((-1,ndim))
+    return coords
+
+def distance_neighbors(coords, pairs):
     """
     Compute all distances between neighbors in a network.
+    
     Parameters
     ----------
     coords : dataframe
@@ -44,35 +65,65 @@ def distance_neighbors(coords, pairs, **kwargs):
     -------
     distances : array
         Distances between each pair of neighbors.
-
     """
     
-    # pos = coords[pairs]  # when coords was a 2d numpy array
     # source nodes coordinates
-    c0 = coords.values[pairs[:,0]-1]
+    c0 = coords[pairs[:,0]]
     # target nodes coordinates
-    c1 = coords.values[pairs[:,1]-1]
+    c1 = coords[pairs[:,1]]
     distances = (c0 - c1)**2
     distances = np.sqrt(distances.sum(axis=1))
     return distances
 
-def find_trim_dist(dist, method, param):
+def find_trim_dist(dist, method='percentile', param=99):
+    """
+    Find the distance threshold to eliminate reconstructed edges in a network.
+
+    Parameters
+    ----------
+    dist : array
+        Distances between pairs of nodes.
+    method : str, optional
+        Method used to compute the threshold. The default is 'percentile'.
+    param : int or float, optional
+        For the 'percentile' method it is the percentile of distances used as 
+        the threshold. The default is 99.
+
+    Returns
+    -------
+    dist_thresh : float
+        Threshold distance.
+    """
     if method == 'percentile':
         dist_thresh = np.percentile(dist, param)
     return dist_thresh
 
-def build_voronoi(coords, trim_dist='percentile', trim_param=0.5, return_dist=False):
+def build_voronoi(coords, trim_dist='percentile', trim_param=99, return_dist=False):
     """
+    Reconstruct edges between nodes by Voronoi tessellation.
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    trim_dist : float, optional
+        Method used to delete reconstructed edges. The default is 'percentile'.
+    param : int or float, optional
+        For the 'percentile' method it is the percentile of distances used as 
+        the threshold. The default is 99.
+    return_dist : bool, optional
+        Whether distances are returned, usefull to try sevral trimming methods and parameters. 
+        The default is False.
+    
     Examples
     --------
-    >>> x = np.array([144, 124,  97, 165, 114,  60, 165,   0,  76,  50, 147])
-    >>> y = np.array([ 0,  3, 21, 28, 34, 38, 51, 54, 58, 56, 61])
-    >>> coords = np.vstack((x,y)).T
-    >>> tesselation(coords)
+    >>> coords = make_simple_coords()
+    >>> pairs = build_voronoi(coords, trim_dist=False)
 
-
-    >>> coords = pd.DataFrame({'x':x, 'y':y})
-    >>> tessellation(coords[['x','y']])
+    Returns
+    -------
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices.
     """
 
     # pairs of indices of neighbors
@@ -99,7 +150,6 @@ def pairs_from_NN(ind):
     -------
     pairs : ndarray
         The (n_pairs x 2) matrix of neighbors indices.
-
     """
     
     NN = ind.shape[1]
@@ -111,12 +161,57 @@ def pairs_from_NN(ind):
     return pairs
 
 def build_NN(coords, k=6, **kwargs):
+    """
+    Reconstruct edges between nodes by nearest neighbors method.
+    An edge is drawn between each node and its k nearest neighbors.
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    k : int, optional
+        Number of nearest neighbors. The default is 6.
+    
+    Examples
+    --------
+    >>> coords = make_simple_coords()
+    >>> pairs = build_NN(coords)
+
+    Returns
+    -------
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices.
+    """
+    
     tree = BallTree(coords, **kwargs)
     _, ind = tree.query(coords, k=k)
     pairs = pairs_from_NN(ind)
     return pairs
 
 def build_within_radius(coords, r, **kwargs):
+    """
+    Reconstruct edges between nodes by within radius method.
+    An edge is drawn between each node and the nodes closer 
+    than a threshold distance.
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    r : float, optional
+        Radius in which nodes are connected.
+    
+    Examples
+    --------
+    >>> coords = make_simple_coords()
+    >>> pairs = build_within_radius(coords, r=60)
+
+    Returns
+    -------
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices.
+    """
+    
     tree = BallTree(coords, **kwargs)
     ind = tree.query_radius(coords, r=r)
     # clean arrays of neighbors from self referencing neighbors
@@ -135,6 +230,29 @@ def build_within_radius(coords, r, **kwargs):
     pairs = np.sort(pairs, axis=1)
     pairs = np.unique(pairs, axis=0)
     return pairs
+
+def hyperdiagonal(coords):
+    """
+    Compute the maximum possible distance from a set of coordinates as the
+    diagonal of the (multidimensional) cube they occupy.
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+
+    Returns
+    -------
+    dist : float
+        Maximum possible distance.
+    """
+    
+    mini = coords.min(axis=0)
+    maxi = coords.max(axis=0)
+    dist = (maxi - mini)**2
+    dist = np.sqrt(dist.sum())
+    return dist
+    
 
 def find_neighbors(masks, i, r=1):
     """
@@ -188,8 +306,10 @@ def build_contacting(masks, r=1):
 
     Returns
     -------
-    pairs : TYPE
-        DESCRIPTION.
+    pairs : ndarray
+        Pairs of neighbors given by the first and second element of each row, 
+        values correspond to values in masks, which are different from index
+        values of nodes
 
     """
     source_nodes = []
@@ -213,40 +333,48 @@ def mask_val_coord(masks):
 
     Parameters
     ----------
-    masks : TYPE
-        DESCRIPTION.
+    masks : array_like
+        2D array of integers defining the identity of masks
+        0 is background (no object detected)
 
     Returns
     -------
-    None.
-
+    coords : dataframe
+        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
     """
     
-    centroids = measure.regionprops_table(masks, properties=('label', 'centroid'))
-    centroids = pd.DataFrame.from_dict(centroids)
-    centroids.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
-    centroids.index = centroids['label']
-    centroids.drop(columns='label', inplace=True)
-    return centroids
-        
+    coords = measure.regionprops_table(masks, properties=('label', 'centroid'))
+    coords = pd.DataFrame.from_dict(coords)
+    coords.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
+    coords.index = coords['label']
+    coords.drop(columns='label', inplace=True)
+    return coords
 
-def plot_network(masks, coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
-                 size_nodes=None, col_edges='k', alpha_edges=0.5, ax=None, 
-                 aspect='equal', **kwargs):
+def refactor_coords_pairs(coords, pairs):
     """
-    **kwargs: labels of nodes
+    Transforms coordinates and pairs of nodes data from segmented areas into
+    the formats used by the other functions for network analysis and visualization.
+
+    Parameters
+    ----------
+    coords : dataframe
+        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    pairs : ndarray
+        Pairs of neighbors given by the first and second element of each row, 
+        values correspond to values in masks, which are different from index
+        values of nodes
+
+    Returns
+    -------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    pairs : ndarray
+        Pairs of neighbors given by the first and second element of each row.
     """
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    # plot nodes
-    ax.scatter(coords.loc[:,'x'], coords.loc[:,'y'], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
-    # plot edges
-    for pair in pairs[:,:]:
-        [x0, y0], [x1, y1] = coords.loc[pair, ['x','y']].values
-        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges)
-    if aspect is not None:
-        ax.set_aspect(aspect)
+    coords = coords.loc[:, ['x', 'y']].values
+    pairs = pairs - 1
+    return coords, pairs
 
 def rescale(data, perc_mini=1, perc_maxi=99, 
             out_mini=0, out_maxi=1, 
@@ -298,6 +426,53 @@ def rescale(data, perc_mini=1, perc_maxi=99,
     else:
         return data_out
 
+def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
+                 size_nodes=None, col_edges='k', alpha_edges=0.5, ax=None, 
+                 aspect='equal', **kwargs):
+    """
+    Plot a network.
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    pairs : ndarray
+        Pairs of neighbors given by the first and second element of each row.
+    figsize : (float, float), default: :rc:`figure.figsize`
+        Width, height in inches. The default is (15, 15).
+    col_nodes : TYPE, optional
+        DESCRIPTION. The default is None.
+    marker : TYPE, optional
+        DESCRIPTION. The default is None.
+    size_nodes : TYPE, optional
+        DESCRIPTION. The default is None.
+    col_edges : TYPE, optional
+        DESCRIPTION. The default is 'k'.
+    alpha_edges : float, optional
+        Tansparency of edges. The default is 0.5.
+    ax : TYPE, optional
+        DESCRIPTION. The default is None.
+    aspect : TYPE, optional
+        DESCRIPTION. The default is 'equal'.
+    **kwargs : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+    """
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    # plot nodes
+    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
+    # plot edges
+    for pair in pairs[:,:]:
+        [x0, y0], [x1, y1] = coords[pair]
+        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges)
+    if aspect is not None:
+        ax.set_aspect(aspect)
+
 def plot_network_distances(coords, pairs, distances,  
                            col_nodes=None, marker=None, size_nodes=None, 
                            cmap_edges='viridis', alpha_edges=0.7, 
@@ -307,8 +482,8 @@ def plot_network_distances(coords, pairs, distances,
 
     Parameters
     ----------
-    coords : dataframe
-        Coordinates of points where columns are 'x', 'y', ...
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
     pairs : ndarray
         Pairs of neighbors given by the first and second element of each row.
     distances : array
@@ -339,13 +514,13 @@ def plot_network_distances(coords, pairs, distances,
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     # plot nodes
-    ax.scatter(coords.loc[:,'x'], coords.loc[:,'y'], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
+    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     scaled_dist, min_dist, max_dist = rescale(distances, return_extrema=True)
     cmap = mpl.cm.viridis
     norm = mpl.colors.Normalize(vmin=min_dist, vmax=max_dist)
     for pair, dist in zip(pairs[:,:], scaled_dist):
-        [x0, y0], [x1, y1] = coords.loc[pair, ['x','y']].values
+        [x0, y0], [x1, y1] = coords[pair]
         ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges)
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
              orientation='vertical', label='Distance')
@@ -368,8 +543,8 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
         DESCRIPTION. The default is (9,9).
     ax : TYPE, optional
         DESCRIPTION. The default is None.
-    **kwargs : TYPE
-        DESCRIPTION.
+    **kwargs : dic
+        Other options for plt.imshow().
 
     Returns
     -------
@@ -395,7 +570,7 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
 #   - Voronoi: OK
 #   - knn: OK
 #   - within radius: OK
-#   - contact (segmented images, ...)
+#   - contact: OK
 #   - Gabriel
 #   - TDA based?
 
