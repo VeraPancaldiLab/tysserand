@@ -30,13 +30,13 @@ def make_simple_coords():
     coords = np.vstack((x,y)).T
     return coords
 
-def distance_neighbors(coords, pairs):
+def distance_neighbors(coords, pairs, **kwargs):
     """
     Compute all distances between neighbors in a network.
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    coords : dataframe
+        Coordinates of points where columns are 'x', 'y', ...
     pairs : ndarray
         Pairs of neighbors given by the first and second element of each row.
 
@@ -47,12 +47,13 @@ def distance_neighbors(coords, pairs):
 
     """
     
-    # positions of pairs of neighbors as x0, y0, x1, y1
-    pos = coords[pairs]
-    pos = np.zeros((pairs.shape[0],4))
-    pos[:,[0,1]] = coords[pairs[:,0], :]
-    pos[:,[2,3]] = coords[pairs[:,1], :]
-    distances = np.sqrt((pos[:,0]-pos[:,2])**2+(pos[:,1]-pos[:,3])**2)
+    # pos = coords[pairs]  # when coords was a 2d numpy array
+    # source nodes coordinates
+    c0 = coords.values[pairs[:,0]-1]
+    # target nodes coordinates
+    c1 = coords.values[pairs[:,1]-1]
+    distances = (c0 - c1)**2
+    distances = np.sqrt(distances.sum(axis=1))
     return distances
 
 def find_trim_dist(dist, method, param):
@@ -205,9 +206,31 @@ def build_contacting(masks, r=1):
     pairs = np.sort(pairs, axis=1)
     pairs = np.unique(pairs, axis=0)
     return pairs
+
+def mask_val_coord(masks):
+    """
+    Compute the mapping between mask regions and their centroid coordinates
+
+    Parameters
+    ----------
+    masks : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    centroids = measure.regionprops_table(masks, properties=('label', 'centroid'))
+    centroids = pd.DataFrame.from_dict(centroids)
+    centroids.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
+    centroids.index = centroids['label']
+    centroids.drop(columns='label', inplace=True)
+    return centroids
         
 
-def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
+def plot_network(masks, coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
                  size_nodes=None, col_edges='k', alpha_edges=0.5, ax=None, 
                  aspect='equal', **kwargs):
     """
@@ -217,10 +240,10 @@ def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     # plot nodes
-    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
+    ax.scatter(coords.loc[:,'x'], coords.loc[:,'y'], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     for pair in pairs[:,:]:
-        [x0, y0], [x1, y1] = coords[pair]
+        [x0, y0], [x1, y1] = coords.loc[pair, ['x','y']].values
         ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges)
     if aspect is not None:
         ax.set_aspect(aspect)
@@ -284,8 +307,8 @@ def plot_network_distances(coords, pairs, distances,
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    coords : dataframe
+        Coordinates of points where columns are 'x', 'y', ...
     pairs : ndarray
         Pairs of neighbors given by the first and second element of each row.
     distances : array
@@ -316,13 +339,13 @@ def plot_network_distances(coords, pairs, distances,
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     # plot nodes
-    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
+    ax.scatter(coords.loc[:,'x'], coords.loc[:,'y'], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     scaled_dist, min_dist, max_dist = rescale(distances, return_extrema=True)
     cmap = mpl.cm.viridis
     norm = mpl.colors.Normalize(vmin=min_dist, vmax=max_dist)
     for pair, dist in zip(pairs[:,:], scaled_dist):
-        [x0, y0], [x1, y1] = coords[pair]
+        [x0, y0], [x1, y1] = coords.loc[pair, ['x','y']].values
         ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges)
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
              orientation='vertical', label='Distance')

@@ -156,11 +156,22 @@ local_maxi = feature.peak_local_max(distance, indices=False,
 markers = measure.label(local_maxi)
 masks = segmentation.watershed(-distance, markers, mask=binary_im)
 showim(color.label2rgb(masks, bg_label=0, colors=label_cmap), origin='lower')
-showim(masks, origin='lower')
 
-pairs = build_contacting(masks)-1
-distances = distance_neighbors(coords, pairs)
-plot_network_distances(coords, pairs, distances, aspect='equal')
+pairs = build_contacting(masks)
+label_coords = mask_val_coord(masks)
+distances = distance_neighbors(label_coords, pairs)
+plot_network_distances(label_coords, pairs, distances, aspect='equal')
+
+# edges from distance between segmented areas
+pairs = build_contacting(masks, r=2)
+label_coords = mask_val_coord(masks)
+distances = distance_neighbors(label_coords, pairs)
+plot_network_distances(label_coords, pairs, distances, aspect='equal')
+
+pairs = build_contacting(masks, r=5)
+label_coords = mask_val_coord(masks)
+distances = distance_neighbors(label_coords, pairs)
+plot_network_distances(label_coords, pairs, distances, aspect='equal')
 
 
 # With nuclei image
