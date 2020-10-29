@@ -6,5 +6,5 @@ save_non_project_files = False
 
 [main]
 version = 0.2.0
-recent_files = ['tysserand/tysserand.py', 'examples/example_pipeline.py', '../Spatial_Networks/code/Data_objects_formatting.py', '../Spatial_Networks/code/comparison_network_construction_libraries.py', '../Spatial_Networks/code/network_visualisation.py']
+recent_files = ['tysserand/tysserand.py', 'examples/example_pipeline.py', '../Spatial_Networks/code/Data_objects_formatting.py', '../Spatial_Networks/code/comparison_network_construction_libraries.py', '../Spatial_Networks/code/network_visualisation.py', '../Spheroids_Lorraine_newcode/code/03-Curvature_based_correction.py']
 

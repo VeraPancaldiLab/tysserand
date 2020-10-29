@@ -24,6 +24,7 @@ plot_network_distances(coords, pairs, distances)
 dist_threshold = 120
 select = distances < dist_threshold
 pairs = pairs[select,:]
+plot_network(coords, pairs)
 
 # make colors for nodes
 # marker --> DAPI 5060C, FITC+TxRed-A-2, FITC+TxRed-A-1 

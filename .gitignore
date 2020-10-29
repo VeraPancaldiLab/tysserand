@@ -1,3 +1,4 @@
 .ipynb_checkpoints
+*.spyproject*
 *dask-worker-space*
 *WSI_LungPredict*

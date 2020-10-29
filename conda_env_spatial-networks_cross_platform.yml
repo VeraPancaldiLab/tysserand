@@ -1,0 +1,20 @@
+name: spatial_networks
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - ipykernel
+  - matplotlib
+  - pip
+  - qtconsole
+  - scipy
+  - seaborn
+  - pathlib
+  - python=3.7
+  - scikit-learn
+  - numpy
+  - hdbscan
+  - umap-learn
+  - dask
+  - spyder-kernels
+prefix: /home/alexis/Programs/anaconda3/envs/spatial_networks

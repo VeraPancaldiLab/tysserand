@@ -1,4 +1,4 @@
-name: spatial_networks
+name: spatial-networks
 channels:
   - conda-forge
   - defaults
