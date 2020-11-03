@@ -206,3 +206,18 @@ coords = mask_val_coord(masks)
 coords, pairs = refactor_coords_pairs(coords, pairs)
 distances = distance_neighbors(coords, pairs)
 plot_network_distances(coords, pairs, distances, aspect='equal')
+
+
+#%% Conversions
+coords = make_simple_coords()
+pairs = build_voronoi(coords, trim_dist=False)
+plot_network(coords, pairs, disp_id=True)
+
+nodes = pd.DataFrame(data=coords, columns=['x', 'y'])
+edges = pd.DataFrame(data=pairs, columns=['source', 'target'])
+G = to_NetworkX(nodes, edges)
+pos = {}
+for i in nodes.index:
+    pos[i] = nodes.loc[i,['x','y']].values
+plt.figure()
+nx.draw_networkx(G, pos=pos)

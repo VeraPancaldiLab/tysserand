@@ -426,9 +426,10 @@ def rescale(data, perc_mini=1, perc_maxi=99,
     else:
         return data_out
 
-def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
-                 size_nodes=None, col_edges='k', alpha_edges=0.5, ax=None, 
-                 aspect='equal', **kwargs):
+def plot_network(coords, pairs, disp_id=False,
+                 col_nodes=None, cmap_nodes=None, marker=None,
+                 size_nodes=200, col_edges='k', alpha_edges=0.5, 
+                 ax=None, figsize=(15, 15), aspect='equal', **kwargs):
     """
     Plot a network.
 
@@ -438,6 +439,8 @@ def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     pairs : ndarray
         Pairs of neighbors given by the first and second element of each row.
+    disp_id: bool
+        If True nodes' indices are displayed.
     figsize : (float, float), default: :rc:`figure.figsize`
         Width, height in inches. The default is (15, 15).
     col_nodes : TYPE, optional
@@ -465,13 +468,19 @@ def plot_network(coords, pairs, figsize=(15, 15), col_nodes=None, marker=None,
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     # plot nodes
-    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
+    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+               marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     for pair in pairs[:,:]:
         [x0, y0], [x1, y1] = coords[pair]
         ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges)
+    if disp_id:
+        offset=0.02
+        for i, (x,y) in enumerate(coords):
+            plt.text(x-offset, y-offset, str(i), zorder=15)
     if aspect is not None:
         ax.set_aspect(aspect)
+    return fig, ax
 
 def plot_network_distances(coords, pairs, distances,  
                            col_nodes=None, marker=None, size_nodes=None, 
@@ -530,6 +539,7 @@ def plot_network_distances(coords, pairs, distances,
     
     if aspect is not None:
         ax.set_aspect(aspect)
+    return fig, ax
 
 def showim(image, figsize=(9,9), ax=None, **kwargs):
     """
@@ -564,6 +574,45 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
     if return_ax:
         return fig, ax
 
+def categorical_to_integer(l):
+    uniq = set(l)
+    nb_uniq = len(uniq)
+    mapping = dict(zip(uniq, range(nb_uniq)))
+    converted = [mapping[x] for x in l]
+    return converted
+
+def flatten_categories(nodes, att):
+    # the reverse operation is 
+    # nodes = nodes.join(pd.get_dummies(nodes['nodes_class']))
+    return nodes.loc[:, att].idxmax(axis=1)
+       
+def to_NetworkX(nodes, edges, attributes=None):
+    import networkx as nx
+    G = nx.from_pandas_edgelist(edges)
+    if attributes is not None:
+        for col in attributes:
+        #     nx.set_node_attributes(G, df_nodes[col].to_dict(), col.replace('+','AND')) # only for glm extension file
+            nx.set_node_attributes(G, nodes[col].to_dict(), col)
+    return G
+
+def to_iGraph(nodes, edges, attributes=None):
+    import igraph as ig
+    # initialize empty graph
+    g = ig.Graph()
+    # add all the vertices
+    g.add_vertices(nodes.shape[0])
+    # add all the edges
+    g.add_edges(edges.values)
+    # add attributes
+    if attributes is not None:
+        for col in attributes:
+            att = nodes[col].values
+            if isinstance(att[0], str):
+                att = categorical_to_integer(att)
+            g.vs[col] = att
+    return g
+
+
 ###### TODO ######
 
 # methods to construct networks:
@@ -578,6 +627,11 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
 #     - static: OK
 #     - interactive with cursor for maw distance and color pops when edge is discarded
 # plots to find appropriate number of neighbors
+
+# export to other libraries:
+#    - NetworkkX
+#    - iGraph
+#    - PySAL
 
 # for big images, zoom arround longest edges
 
