@@ -106,8 +106,8 @@ def build_voronoi(coords, trim_dist='percentile', trim_param=99, return_dist=Fal
     ----------
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
-    trim_dist : float, optional
-        Method used to delete reconstructed edges. The default is 'percentile'.
+    trim_dist : str or float, optional
+        Method or distance used to delete reconstructed edges. The default is 'percentile'.
     param : int or float, optional
         For the 'percentile' method it is the percentile of distances used as 
         the threshold. The default is 99.
