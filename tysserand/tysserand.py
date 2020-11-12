@@ -30,7 +30,7 @@ def make_simple_coords():
     coords = np.vstack((x,y)).T
     return coords
 
-def make_random_nodes(size=100, ndim=2):
+def make_random_nodes(size=100, ndim=2, expand=True):
     """
     Make a random set of nodes
 
@@ -40,6 +40,10 @@ def make_random_nodes(size=100, ndim=2):
         Number of nodes. The default is 100.
     ndim : int, optional
         Number of dimensions. The default is 2.
+    expand : bool, optional
+        If True, positions are multiplied by size**(1/ndim) in order to have a 
+        consistent spacing across various `size` and `ndim` values. 
+        The default is True.
 
     Returns
     -------
@@ -48,7 +52,73 @@ def make_random_nodes(size=100, ndim=2):
     """
     
     coords = np.random.random(size=size*ndim).reshape((-1,ndim))
+    if expand:
+        coords = coords * size**(1/ndim)
     return coords
+
+def make_random_tiles(sx=500, sy=500, nb=50, 
+                      regular=True, double_pattern=False, return_image=False):
+    """
+    Build contacting areas similar to cell segmentation in tissues.
+
+    Parameters
+    ----------
+    sx : int, optional
+        Size of the image on the x axis. The default is 500.
+    sy : int, optional
+        Size of the image on the x axis. The default is 500.
+    nb : int, optional
+        Related to the number of points, but not equal. The default is 50.
+    regular : bool, optional
+        If True points are on a regular lattice, else they are randomly located. 
+        The default is True.
+    double_pattern : bool, optional
+        If True the regularlattice has more points. The default is False.
+    return_image : bool, optional
+        If True the image of seed points is also returned. The default is False.
+
+    Returns
+    -------
+    coords : ndarray
+        Coordinates of the set of nodes.
+    masks : ndarray
+        Detected areas coded by a unique integer.
+        
+    Examples
+    --------
+    >>> coords, masks, image = make_random_tiles(double_pattern=True, return_image=True)
+    >>> showim(image)
+    >>> label_cmap = mpl.cm.get_cmap('Set2')(range(8))
+    >>> showim(color.label2rgb(masks, bg_label=0, colors=label_cmap), origin='lower')
+
+    """
+    
+    image = np.zeros((sy, sx))
+    if regular:
+        x_step = int(sx/nb)
+        x = np.hstack((np.arange(0, sx, x_step),
+                          np.arange(0, sx, x_step)+int(x_step/2)))
+        y_step = int(sy/nb)
+        if double_pattern:
+            y = np.hstack((np.arange(0, sy, y_step),
+                              np.arange(0, sy, y_step)+int(y_step/2)))
+        else:
+            y = np.arange(0, sy, y_step)
+        x_id = np.tile(x, y.size//2)
+        y_id = np.repeat(y, x.size//2)
+    else:
+        x_id = np.random.randint(sx, size=nb)
+        y_id = np.random.randint(sy, size=nb)
+        
+    coords = np.vstack((x_id, y_id)).T
+    image[y_id, x_id] = 1
+    masks = segmentation.watershed(-image)
+    
+    if return_image:
+        return coords, masks, image
+    else:
+        return coords, masks
+
 
 def distance_neighbors(coords, pairs):
     """
@@ -426,7 +496,8 @@ def rescale(data, perc_mini=1, perc_maxi=99,
     else:
         return data_out
 
-def plot_network(coords, pairs, disp_id=False,
+def plot_network(coords, pairs, disp_id=False, labels=None,
+                 color_mapper=None, legend=True,
                  col_nodes=None, cmap_nodes=None, marker=None,
                  size_nodes=200, col_edges='k', alpha_edges=0.5, 
                  ax=None, figsize=(15, 15), aspect='equal', **kwargs):
@@ -441,10 +512,16 @@ def plot_network(coords, pairs, disp_id=False,
         Pairs of neighbors given by the first and second element of each row.
     disp_id: bool
         If True nodes' indices are displayed.
+    labels: panda series
+        The nodes' labels from which they are colored.
+    color_mapper: dict
+        Maps each label to its color. Computed if not provided.
     figsize : (float, float), default: :rc:`figure.figsize`
         Width, height in inches. The default is (15, 15).
     col_nodes : TYPE, optional
         DESCRIPTION. The default is None.
+    cmap_nodes: list
+        List of hexadecimal colors for nodes attributes.
     marker : TYPE, optional
         DESCRIPTION. The default is None.
     size_nodes : TYPE, optional
@@ -466,10 +543,28 @@ def plot_network(coords, pairs, disp_id=False,
     """
     
     if ax is None:
+        ax_none = True
         fig, ax = plt.subplots(figsize=figsize)
+    else:
+        ax_none = False
     # plot nodes
-    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
-               marker=marker, s=size_nodes, zorder=10, **kwargs)
+    if labels is not None:
+        uniq = labels.unique()
+        # color nodes with manual colors
+        if color_mapper is None:
+            if cmap_nodes is None:
+                att_colors = sns.color_palette('muted').as_hex() 
+            color_mapper = dict(zip(uniq, att_colors))
+        for label in uniq:
+            select = labels == label
+            color = color_mapper[label]
+            ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
+                       marker=marker, s=size_nodes, zorder=10, **kwargs)
+        if legend:
+            plt.legend()
+    else:
+        ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+                   marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     for pair in pairs[:,:]:
         [x0, y0], [x1, y1] = coords[pair]
@@ -480,10 +575,12 @@ def plot_network(coords, pairs, disp_id=False,
             plt.text(x-offset, y-offset, str(i), zorder=15)
     if aspect is not None:
         ax.set_aspect(aspect)
-    return fig, ax
+    if ax_none:
+        return fig, ax
 
-def plot_network_distances(coords, pairs, distances,  
-                           col_nodes=None, marker=None, size_nodes=None, 
+def plot_network_distances(coords, pairs, distances, labels=None,
+                           color_mapper=None, legend=True,
+                           col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None, 
                            cmap_edges='viridis', alpha_edges=0.7, 
                            figsize=(15, 15), ax=None, aspect='equal', **kwargs):
     """
@@ -497,8 +594,14 @@ def plot_network_distances(coords, pairs, distances,
         Pairs of neighbors given by the first and second element of each row.
     distances : array
         Distances between each pair of neighbors.
+    labels: panda series
+        The nodes' labels from which they are colored.
+    color_mapper: dict
+        Maps each label to its color. Computed if not provided.
     col_nodes : TYPE, optional
         DESCRIPTION. The default is None.
+    cmap_nodes: list
+        List of hexadecimal colors for nodes attributes.
     marker : str, optional
         Marker for nodes. The default is None.
     size_nodes : float, optional
@@ -521,9 +624,28 @@ def plot_network_distances(coords, pairs, distances,
     """
     
     if ax is None:
+        ax_none = True
         fig, ax = plt.subplots(figsize=figsize)
+    else:
+        ax_none = False
     # plot nodes
-    ax.scatter(coords[:,0], coords[:,1], c=col_nodes, marker=marker, s=size_nodes, zorder=10, **kwargs)
+    if labels is not None:
+        uniq = labels.unique()
+        # color nodes with manual colors
+        if color_mapper is None:
+            if cmap_nodes is None:
+                att_colors = sns.color_palette('muted').as_hex() 
+            color_mapper = dict(zip(uniq, att_colors))
+        for label in uniq:
+            select = labels == label
+            color = color_mapper[label]
+            ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
+                       marker=marker, s=size_nodes, zorder=10, **kwargs)
+        if legend:
+            plt.legend()
+    else:
+        ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+                   marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
     scaled_dist, min_dist, max_dist = rescale(distances, return_extrema=True)
     cmap = mpl.cm.viridis
@@ -539,7 +661,8 @@ def plot_network_distances(coords, pairs, distances,
     
     if aspect is not None:
         ax.set_aspect(aspect)
-    return fig, ax
+    if ax_none:
+        return fig, ax
 
 def showim(image, figsize=(9,9), ax=None, **kwargs):
     """
