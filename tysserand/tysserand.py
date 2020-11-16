@@ -56,8 +56,9 @@ def make_random_nodes(size=100, ndim=2, expand=True):
         coords = coords * size**(1/ndim)
     return coords
 
-def make_random_tiles(sx=500, sy=500, nb=50, 
-                      regular=True, double_pattern=False, return_image=False):
+def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
+                      regular=True, double_pattern=False, 
+                      assym_y=True, return_image=False):
     """
     Build contacting areas similar to cell segmentation in tissues.
 
@@ -69,11 +70,15 @@ def make_random_tiles(sx=500, sy=500, nb=50,
         Size of the image on the x axis. The default is 500.
     nb : int, optional
         Related to the number of points, but not equal. The default is 50.
+    noise_sigma : None or float, optional
+        If float, a gaussian noise is added to seeds positions.
     regular : bool, optional
         If True points are on a regular lattice, else they are randomly located. 
         The default is True.
     double_pattern : bool, optional
-        If True the regularlattice has more points. The default is False.
+        If True the regular lattice has more points. The default is False.
+    assym_y : bool, optional
+        If True the frenquency of seeds is twice higher on the y-axis. The default is True.
     return_image : bool, optional
         If True the image of seed points is also returned. The default is False.
 
@@ -95,20 +100,36 @@ def make_random_tiles(sx=500, sy=500, nb=50,
     
     image = np.zeros((sy, sx))
     if regular:
-        x_step = int(sx/nb)
-        x = np.hstack((np.arange(0, sx, x_step),
-                          np.arange(0, sx, x_step)+int(x_step/2)))
-        y_step = int(sy/nb)
+#         x_step = int(sx/nb)
+#         x = np.hstack((np.arange(0, sx+1, x_step),
+#                           np.arange(0, sx, x_step)+int(x_step/2)))
+        x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
+        x = np.hstack((x[::2], x[1::2]))
+#         y_step = int(sy/nb)
+        if assym_y:
+            nb = nb*2
+        y = np.linspace(start=0, stop=sy-1, num=nb, dtype=int)
         if double_pattern:
-            y = np.hstack((np.arange(0, sy, y_step),
-                              np.arange(0, sy, y_step)+int(y_step/2)))
-        else:
-            y = np.arange(0, sy, y_step)
+#             y = np.hstack((np.arange(0, sy, y_step),
+#                               np.arange(0, sy, y_step)+int(y_step/2)))
+            y = np.hstack((y[::2], y[1::2]))
+#         else:
+#             y = np.arange(0, sy, y_step)
         x_id = np.tile(x, y.size//2)
         y_id = np.repeat(y, x.size//2)
     else:
         x_id = np.random.randint(sx, size=nb)
         y_id = np.random.randint(sy, size=nb)
+        
+    if noise_sigma is not None:
+        x_id = x_id + np.random.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
+        x_id[x_id<0] = 0
+        x_id[x_id>sx-1] = sx-1
+        x_id = np.round(x_id).astype(int)
+        y_id = y_id + np.random.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
+        y_id[y_id<0] = 0
+        y_id[y_id>sy-1] = sy-1
+        y_id = np.round(y_id).astype(int)
         
     coords = np.vstack((x_id, y_id)).T
     image[y_id, x_id] = 1
@@ -499,7 +520,8 @@ def rescale(data, perc_mini=1, perc_maxi=99,
 def plot_network(coords, pairs, disp_id=False, labels=None,
                  color_mapper=None, legend=True,
                  col_nodes=None, cmap_nodes=None, marker=None,
-                 size_nodes=200, col_edges='k', alpha_edges=0.5, 
+                 size_nodes=None, col_edges='k', alpha_edges=0.5, 
+                 linewidth=None,
                  ax=None, figsize=(15, 15), aspect='equal', **kwargs):
     """
     Plot a network.
@@ -530,6 +552,8 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         DESCRIPTION. The default is 'k'.
     alpha_edges : float, optional
         Tansparency of edges. The default is 0.5.
+    linewidth : float, optional
+        Width of edges. The default is None.
     ax : TYPE, optional
         DESCRIPTION. The default is None.
     aspect : TYPE, optional
@@ -568,7 +592,7 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
     # plot edges
     for pair in pairs[:,:]:
         [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges)
+        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges, linewidth=linewidth)
     if disp_id:
         offset=0.02
         for i, (x,y) in enumerate(coords):
@@ -581,7 +605,7 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
 def plot_network_distances(coords, pairs, distances, labels=None,
                            color_mapper=None, legend=True,
                            col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None, 
-                           cmap_edges='viridis', alpha_edges=0.7, 
+                           cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
                            figsize=(15, 15), ax=None, aspect='equal', **kwargs):
     """
     Plot a network with edges colored by their length.
@@ -610,6 +634,8 @@ def plot_network_distances(coords, pairs, distances, labels=None,
         Colormap of edges. The default is 'viridis'.
     alpha_edges : float, optional
         Tansparency of edges. The default is 0.7.
+    linewidth : float, optional
+        Width of edges. The default is None.
     figsize : (float, float), default: :rc:`figure.figsize`
         Width, height in inches. The default is (15, 15).
     aspect : str, optional
@@ -652,7 +678,7 @@ def plot_network_distances(coords, pairs, distances, labels=None,
     norm = mpl.colors.Normalize(vmin=min_dist, vmax=max_dist)
     for pair, dist in zip(pairs[:,:], scaled_dist):
         [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges)
+        ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges, linewidth=linewidth)
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
              orientation='vertical', label='Distance')
     # TODO: plot many lines more efficiently check
