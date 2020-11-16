@@ -100,21 +100,13 @@ def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
     
     image = np.zeros((sy, sx))
     if regular:
-#         x_step = int(sx/nb)
-#         x = np.hstack((np.arange(0, sx+1, x_step),
-#                           np.arange(0, sx, x_step)+int(x_step/2)))
         x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
         x = np.hstack((x[::2], x[1::2]))
-#         y_step = int(sy/nb)
         if assym_y:
             nb = nb*2
         y = np.linspace(start=0, stop=sy-1, num=nb, dtype=int)
         if double_pattern:
-#             y = np.hstack((np.arange(0, sy, y_step),
-#                               np.arange(0, sy, y_step)+int(y_step/2)))
             y = np.hstack((y[::2], y[1::2]))
-#         else:
-#             y = np.arange(0, sy, y_step)
         x_id = np.tile(x, y.size//2)
         y_id = np.repeat(y, x.size//2)
     else:
