@@ -181,9 +181,9 @@ def find_trim_dist(dist, method='percentile', param=99):
         dist_thresh = np.percentile(dist, param)
     return dist_thresh
 
-def build_voronoi(coords, trim_dist='percentile', trim_param=99, return_dist=False):
+def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=False):
     """
-    Reconstruct edges between nodes by Voronoi tessellation.
+    Reconstruct edges between nodes by Delaunay triangulation.
 
     Parameters
     ----------
@@ -201,7 +201,7 @@ def build_voronoi(coords, trim_dist='percentile', trim_param=99, return_dist=Fal
     Examples
     --------
     >>> coords = make_simple_coords()
-    >>> pairs = build_voronoi(coords, trim_dist=False)
+    >>> pairs = build_delaunay(coords, trim_dist=False)
 
     Returns
     -------
@@ -219,7 +219,7 @@ def build_voronoi(coords, trim_dist='percentile', trim_param=99, return_dist=Fal
         pairs = pairs[dist < trim_dist, :]
     return pairs
 
-def pairs_from_NN(ind):
+def pairs_from_knn(ind):
     """
     Convert a matrix of Neirest Neighbors indices into 
     a matrix of unique pairs of neighbors
@@ -243,9 +243,9 @@ def pairs_from_NN(ind):
     pairs = np.unique(pairs, axis=0)
     return pairs
 
-def build_NN(coords, k=6, **kwargs):
+def build_knn(coords, k=6, **kwargs):
     """
-    Reconstruct edges between nodes by nearest neighbors method.
+    Reconstruct edges between nodes by k-nearest neighbors (knn) method.
     An edge is drawn between each node and its k nearest neighbors.
 
     Parameters
@@ -258,7 +258,7 @@ def build_NN(coords, k=6, **kwargs):
     Examples
     --------
     >>> coords = make_simple_coords()
-    >>> pairs = build_NN(coords)
+    >>> pairs = build_knn(coords)
 
     Returns
     -------
@@ -268,14 +268,14 @@ def build_NN(coords, k=6, **kwargs):
     
     tree = BallTree(coords, **kwargs)
     _, ind = tree.query(coords, k=k)
-    pairs = pairs_from_NN(ind)
+    pairs = pairs_from_knn(ind)
     return pairs
 
-def build_within_radius(coords, r, **kwargs):
+def build_rdn(coords, r, **kwargs):
     """
-    Reconstruct edges between nodes by within radius method.
+    Reconstruct edges between nodes by radial distance neighbors (rdn) method.
     An edge is drawn between each node and the nodes closer 
-    than a threshold distance.
+    than a threshold distance (within a radius).
 
     Parameters
     ----------
@@ -287,7 +287,7 @@ def build_within_radius(coords, r, **kwargs):
     Examples
     --------
     >>> coords = make_simple_coords()
-    >>> pairs = build_within_radius(coords, r=60)
+    >>> pairs = build_rdn(coords, r=60)
 
     Returns
     -------
