@@ -783,10 +783,10 @@ def to_NetworkX(nodes, edges, attributes=None):
 
     Parameters
     ----------
-    coords : ndarray or dataframe
+    nodes : ndarray or dataframe
         Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    pairs : ndarray or dataframe
-        The (n_pairs x 2) array of neighbors indices.
+    edges : ndarray or dataframe
+        The pairs of nodes given by their indices.
     attributes : dataframe
         Attributes of nodes to be added in NetworkX. Default is None.
 
@@ -812,6 +812,23 @@ def to_NetworkX(nodes, edges, attributes=None):
     return G
 
 def to_iGraph(nodes, edges, attributes=None):
+    """
+    Convert tysserand network representation to an iGraph network object
+
+    Parameters
+    ----------
+    nodes : ndarray or dataframe
+        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    edges : ndarray or dataframe
+        The pairs of nodes given by their indices.
+    attributes : dataframe
+        Attributes of nodes to be added in NetworkX. Default is None.
+
+    Returns
+    -------
+    G : iGraph object
+        The converted network.
+    """
     
     import igraph as ig
     # convert to dataframe if numpy array
