@@ -14,6 +14,7 @@ from scipy.spatial import Voronoi
 from sklearn.neighbors import BallTree
 from skimage import morphology, feature, measure, segmentation, filters, color
 from scipy import ndimage as ndi
+from scipy.sparse import csr_matrix
 
 def make_simple_coords():
     """
@@ -851,3 +852,34 @@ def to_iGraph(nodes, edges, attributes=None):
                 att = categorical_to_integer(att)
             G.vs[col] = att
     return G
+
+def add_to_AnnData(coords, pairs, adata):
+    """    
+    Convert tysserand network representation to sparse matrices
+    and add them to an AnnData (Scanpy) object.
+
+    Parameters
+    ----------
+    nodes : ndarray
+        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    edges : ndarray
+        The pairs of nodes given by their indices.
+    adata : AnnData object
+        An object dedicated to single-cell data analysis.
+    """
+    
+    # convert arrays to sparse matrices
+    n_cells = adata.shape[0]
+    connect = np.ones(pairs.shape[0], dtype=np.int8)
+    sparse_connect = csr_matrix((connect, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.int8)
+    distances = distance_neighbors(coords, pairs)
+    sparse_dist = csr_matrix((distances, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.float)
+    
+    # add to AnnData object
+    adata.obsp['connectivities'] = sparse_connect
+    adata.obsp['distances'] = sparse_dist
+    adata.uns['neighbors'] = {'connectivities_key': 'connectivities', 
+                              'distances_key': 'distances', 
+                              'params': {'method': 'delaunay', 
+                                         'metric': 'euclidean', 
+                                         'edge_trimming': 'percentile 99'}}
