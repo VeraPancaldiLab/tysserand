@@ -10,7 +10,7 @@ A turorial is available [here](./examples/02-tutorial.ipynb)
 
 ![Set of nodes](./images/publication_figures/mIF-nodes_positions.png)
 
-### Voronoi tessellation
+### Delaunay triangulation
 
 This methods builds virtual cells centered arround each node and contacting each other to fully tile the space occupyied by the nodes. Edges are drawn between the nodes of contacting tiles.
 
@@ -18,19 +18,19 @@ This methods builds virtual cells centered arround each node and contacting each
 ![Trimmed network](./images/publication_figures/mIF-Delaunay_network.png)
 ![Network overlay on original tissue image](./images/publication_figures/mIF-Delaunay_superimposed.png)
 
-### K Nearest Neighbors
+### k-nearest neighbors
 
 Each node is linked with its k nearest neighbors. It is the most common method used in single cell publications, althought it produces artifact well visible on simple 2D networks.
 
 ![Edge lengths with *k-nearest neighbors* reconstruction](./images/publication_figures/mIF-knn_distances.png)
 
-### Within radius
+### radial distance neighbors
 
 Each node is linked to nodes closer than a threshold distance D, that is to say each node is linked to all nodes in a circle of radius D.
 
 ![Edge lengths with *radial distance neighbors* reconstruction](./images/publication_figures/mIF-rdn_distances.png)
 
-### Contacting areas
+### Area contact
 
 Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.
 
