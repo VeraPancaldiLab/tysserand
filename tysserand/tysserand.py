@@ -532,30 +532,30 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         Maps each label to its color. Computed if not provided.
     figsize : (float, float), default: :rc:`figure.figsize`
         Width, height in inches. The default is (15, 15).
-    col_nodes : TYPE, optional
-        DESCRIPTION. The default is None.
+    col_nodes : str of matplotlib compatible color, optional
+        Color of nodes. The default is None.
     cmap_nodes: list
         List of hexadecimal colors for nodes attributes.
-    marker : TYPE, optional
-        DESCRIPTION. The default is None.
-    size_nodes : TYPE, optional
-        DESCRIPTION. The default is None.
-    col_edges : TYPE, optional
-        DESCRIPTION. The default is 'k'.
+    marker : str, optional
+        Marker used to display nodes. The default is None.
+    size_nodes : int, optional
+        Size of nodes. The default is None.
+    col_edges : str or matplotlib compatible color, optional
+        Color of edges. The default is 'k'.
     alpha_edges : float, optional
         Tansparency of edges. The default is 0.5.
     linewidth : float, optional
         Width of edges. The default is None.
-    ax : TYPE, optional
-        DESCRIPTION. The default is None.
-    aspect : TYPE, optional
-        DESCRIPTION. The default is 'equal'.
-    **kwargs : TYPE
-        DESCRIPTION.
+    ax : matplotlib ax object, optional
+        If provided, the plot is displayed in ax. The default is None.
+    aspect : str, optional
+        Control aspect ration of the figure. The default is 'equal'.
+    **kwargs : dict
+        Optional parameters to display nodes.
 
     Returns
     -------
-    None.
+    None or (fig, ax) if not provided in parameters.
     """
     
     if ax is None:
@@ -614,12 +614,12 @@ def plot_network_distances(coords, pairs, distances, labels=None,
         The nodes' labels from which they are colored.
     color_mapper: dict
         Maps each label to its color. Computed if not provided.
-    col_nodes : TYPE, optional
-        DESCRIPTION. The default is None.
+    col_nodes : str of matplotlib compatible color, optional
+        Color of nodes. The default is None.
     cmap_nodes: list
         List of hexadecimal colors for nodes attributes.
     marker : str, optional
-        Marker for nodes. The default is None.
+        Marker used to display nodes. The default is None.
     size_nodes : float, optional
         Size of nodes. The default is None.
     cmap_edges : str of matplotlib.colormap, optional
@@ -630,6 +630,8 @@ def plot_network_distances(coords, pairs, distances, labels=None,
         Width of edges. The default is None.
     figsize : (float, float), default: :rc:`figure.figsize`
         Width, height in inches. The default is (15, 15).
+    ax : matplotlib ax object, optional
+        If provided, the plot is displayed in ax. The default is None.
     aspect : str, optional
         Proportions of the figure. The default is None.
     **kwargs : TYPE
@@ -637,7 +639,7 @@ def plot_network_distances(coords, pairs, distances, labels=None,
 
     Returns
     -------
-    None.
+    None or (fig, ax) if not provided in parameters.
 
     """
     
@@ -690,19 +692,16 @@ def showim(image, figsize=(9,9), ax=None, **kwargs):
     ----------
     image : ndarray
         A 1 or 3 channels images.
-    figsize : TYPE, optional
-        DESCRIPTION. The default is (9,9).
-    ax : TYPE, optional
-        DESCRIPTION. The default is None.
+    figsize : (int, int), optional
+        Size of the figure. The default is (9,9).
+    ax : matplotlib ax object, optional
+        If provided, the plot is displayed in ax. The default is None.
     **kwargs : dic
         Other options for plt.imshow().
 
     Returns
     -------
-    fig : TYPE
-        DESCRIPTION.
-    ax : TYPE
-        DESCRIPTION.
+    (fig, ax)
     """
     if ax is None:
         return_ax = True
@@ -752,33 +751,3 @@ def to_iGraph(nodes, edges, attributes=None):
                 att = categorical_to_integer(att)
             g.vs[col] = att
     return g
-
-
-###### TODO ######
-
-# methods to construct networks:
-#   - Voronoi: OK
-#   - knn: OK
-#   - within radius: OK
-#   - contact: OK
-#   - Gabriel
-#   - TDA based?
-
-# plots to find distance threshold:
-#     - static: OK
-#     - interactive with cursor for maw distance and color pops when edge is discarded
-# plots to find appropriate number of neighbors
-
-# export to other libraries:
-#    - NetworkkX
-#    - iGraph
-#    - PySAL
-
-# for big images, zoom arround longest edges
-
-# Examples and benchmarks with:
-#     - very small network
-#     - tile from WSI
-#     - WSI data 
-#       (/home/alexis/Projects/Image_to_Network/data/raw/WSI/conversion/converted)
-#     - random dots, choose data size
