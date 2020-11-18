@@ -142,7 +142,7 @@ def distance_neighbors(coords, pairs):
     coords : dataframe
         Coordinates of points where columns are 'x', 'y', ...
     pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row.
+        The (n_pairs x 2) array of neighbors indices.
 
     Returns
     -------
@@ -206,7 +206,7 @@ def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=Fa
     Returns
     -------
     pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices.
+        The (n_pairs x 2) array of neighbors indices.
     """
 
     # pairs of indices of neighbors
@@ -354,7 +354,9 @@ def find_neighbors(masks, i, r=1):
     Returns
     -------
     pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices.
+        Pairs of neighbors given by the first and second element of each row, 
+        values correspond to values in masks, which are different from index
+        values of nodes
     """
     
     mask = masks == i
@@ -412,7 +414,7 @@ def build_contacting(masks, r=1):
 
 def mask_val_coord(masks):
     """
-    Compute the mapping between mask regions and their centroid coordinates
+    Compute the mapping between mask regions and their centroid coordinates.
 
     Parameters
     ----------
@@ -523,7 +525,7 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row.
+        The (n_pairs x 2) array of neighbors indices.
     disp_id: bool
         If True nodes' indices are displayed.
     labels: panda series
@@ -607,7 +609,7 @@ def plot_network_distances(coords, pairs, distances, labels=None,
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row.
+        The (n_pairs x 2) array of neighbors indices.
     distances : array
         Distances between each pair of neighbors.
     labels: panda series
@@ -725,29 +727,110 @@ def flatten_categories(nodes, att):
     # the reverse operation is 
     # nodes = nodes.join(pd.get_dummies(nodes['nodes_class']))
     return nodes.loc[:, att].idxmax(axis=1)
+
+def coords_to_df(coords, columns=None):
+    """
+    Convert an array of coordinates of nodes into a dataframe.
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    columns : Index or array-like
+        Column labels to use for resulting frame. Will default to
+        ['x0', 'x1',..., 'xn'] if no column labels are provided.
+
+    Returns
+    -------
+    nodes : dataframe
+        Coordinates of nodes indicated by 'x', 'y' or other if required.
+    """
+    nb_dim = coords.shape[1]
+    if columns is None:
+        if nb_dim == 2:
+            columns = ['x', 'y']
+        elif nb_dim == 3:
+            columns = ['x', 'y', 'y']
+        else:
+            columns = ['x'+str(i) for i in range(nb_dim)]
+    
+    nodes = pd.DataFrame(data=coords, columns=columns)
+    return nodes
+
+def pairs_to_df(pairs, columns=['source', 'target']):
+    """
+    Convert an array of pairs of nodes into a dataframe
+
+    Parameters
+    ----------
+    pairs : ndarray
+        The (n_pairs x 2) array of neighbors indices.
+    columns : Index or array-like
+        Column labels to use for resulting frame. Default is ['source', 'target']
+
+    Returns
+    -------
+    edges : dataframe
+        Edges indicated by the nodes 'source' and 'target' they link.
+    """
+
+    edges = pd.DataFrame(data=pairs, columns=columns)
+    return edges
        
 def to_NetworkX(nodes, edges, attributes=None):
+    """
+    Convert tysserand network representation to a NetworkX network object
+
+    Parameters
+    ----------
+    coords : ndarray or dataframe
+        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    pairs : ndarray or dataframe
+        The (n_pairs x 2) array of neighbors indices.
+    attributes : dataframe
+        Attributes of nodes to be added in NetworkX. Default is None.
+
+    Returns
+    -------
+    G : NetworkX object
+        The converted network.
+    """
+    
     import networkx as nx
+    # convert to dataframe if numpy array
+    if isinstance(nodes, np.ndarray):
+        nodes = coords_to_df(nodes)
+    if isinstance(edges, np.ndarray):
+        edges = pairs_to_df(edges)
+    
     G = nx.from_pandas_edgelist(edges)
     if attributes is not None:
-        for col in attributes:
-        #     nx.set_node_attributes(G, df_nodes[col].to_dict(), col.replace('+','AND')) # only for glm extension file
-            nx.set_node_attributes(G, nodes[col].to_dict(), col)
+        for col in attributes.columns:
+            # only for glm extension file:
+            # nx.set_node_attributes(G, attributes[col].to_dict(), col.replace('+','AND')) 
+            nx.set_node_attributes(G, attributes[col].to_dict(), col)
     return G
 
 def to_iGraph(nodes, edges, attributes=None):
+    
     import igraph as ig
+    # convert to dataframe if numpy array
+    if isinstance(nodes, np.ndarray):
+        nodes = coords_to_df(nodes)
+    if isinstance(edges, np.ndarray):
+        edges = pairs_to_df(edges)
+    
     # initialize empty graph
-    g = ig.Graph()
+    G = ig.Graph()
     # add all the vertices
-    g.add_vertices(nodes.shape[0])
+    G.add_vertices(nodes.shape[0])
     # add all the edges
-    g.add_edges(edges.values)
+    G.add_edges(edges.values)
     # add attributes
     if attributes is not None:
-        for col in attributes:
-            att = nodes[col].values
+        for col in attributes.columns:
+            att = attributes[col].values
             if isinstance(att[0], str):
                 att = categorical_to_integer(att)
-            g.vs[col] = att
-    return g
+            G.vs[col] = att
+    return G
