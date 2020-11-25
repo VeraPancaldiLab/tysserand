@@ -568,7 +568,12 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         ax_none = False
     # plot nodes
     if labels is not None:
-        uniq = labels.unique()
+        if isinstance(labels, np.ndarray):
+            uniq = np.unique(labels)
+        elif isinstance(labels, pd.Series):
+            uniq = labels.unique()
+        else:
+            uniq = np.unique(np.array(labels))
         # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
@@ -653,7 +658,12 @@ def plot_network_distances(coords, pairs, distances, labels=None,
         ax_none = False
     # plot nodes
     if labels is not None:
-        uniq = labels.unique()
+        if isinstance(labels, np.ndarray):
+            uniq = np.unique(labels)
+        elif isinstance(labels, pd.Series):
+            uniq = labels.unique()
+        else:
+            uniq = np.unique(np.array(labels))
         # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
