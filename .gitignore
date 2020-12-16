@@ -2,3 +2,4 @@
 *.spyproject*
 *dask-worker-space*
 *WSI_LungPredict*
+*cache*
