@@ -6,6 +6,13 @@ A library for fast spatial network reconstruction.
 You can find the preprint and supplementary information on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v1).  
 A turorial is available [here](./examples/02-tutorial.ipynb)
 
+## Installation
+
+Simply do
+```bash
+pip install tysserand
+```
+
 ## Implemented methods
 
 ![Set of nodes](./images/publication_figures/mIF-nodes_positions.png)
