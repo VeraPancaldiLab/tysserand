@@ -458,8 +458,12 @@ def refactor_coords_pairs(coords, pairs):
         Pairs of neighbors given by the first and second element of each row.
     """
     
+    mapper = dict(zip(coords.index, np.arange(coords.shape[0])))
+    pairs = pd.DataFrame({'source': pairs[:,0], 'target': pairs[:,1]})
+    pairs['source'] = pairs['source'].map(mapper)
+    pairs['target'] = pairs['target'].map(mapper)
     coords = coords.loc[:, ['x', 'y']].values
-    pairs = pairs - 1
+    pairs = pairs.loc[:, ['source', 'target']].values
     return coords, pairs
 
 def rescale(data, perc_mini=1, perc_maxi=99, 
