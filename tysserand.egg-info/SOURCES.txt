@@ -1,0 +1,8 @@
+README.md
+setup.py
+tysserand/__init__.py
+tysserand/tysserand.py
+tysserand.egg-info/PKG-INFO
+tysserand.egg-info/SOURCES.txt
+tysserand.egg-info/dependency_links.txt
+tysserand.egg-info/top_level.txt
