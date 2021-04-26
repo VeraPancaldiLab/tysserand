@@ -336,7 +336,7 @@ def hyperdiagonal(coords):
     dist = (maxi - mini)**2
     dist = np.sqrt(dist.sum())
     return dist
-    
+
 
 def find_neighbors(masks, i, r=1):
     """
@@ -791,7 +791,93 @@ def pairs_to_df(pairs, columns=['source', 'target']):
 
     edges = pd.DataFrame(data=pairs, columns=columns)
     return edges
-       
+
+# +
+def double_sort(data, last_var=0):
+    """
+    Sort twice an array, first on axis 1, then preserves
+    whole rows and sort by one column on axis 0.
+    Usefull to compare pairs of nodes obtained
+    with different methods.
+
+    Parameters
+    ----------
+    data : 2D array
+        Data to sort.
+    last_var : int, optional. The default is 0.
+        Column by which intact rows are sorted.
+
+    Returns
+    -------
+    data : 2D array
+        Sorted data.
+        
+    Examples
+    --------
+    >>> pairs = np.array([[4,3],
+                          [5,6],
+                          [2,1]])
+    >>> double_sort(pairs)
+    array([[1, 2],
+           [3, 4],
+           [5, 6]])
+    """
+    
+    # doing simply np.sort(np.sort(pairs, axis=1), axis=0)
+    # would uncouple first and second elements of pairs
+    # during the second sorting (axis=0)
+    data = np.sort(data, axis=1)
+    x_sort = np.argsort(data[:, 0])
+    data = data[x_sort]
+    
+    return data
+
+def confusion_stats(set_true, set_test):
+    """
+    Count the true positives, false positives and false
+    negatives in a test set with respect to a "true" set. 
+    True negatives are not counted.
+    """
+    true_pos = len(set_true.intersection(set_test))
+    false_pos = len(set_test.difference(set_true))
+    false_neg = len(set_true.difference(set_test))
+    
+    return true_pos, false_pos, false_neg
+
+
+def score_method(pairs_true, pairs_test):
+    """
+    Compute a performance score from the counts of
+    true positives, false positives and false negatives
+    of predicted pairs of nodes that are "double sorted".
+    
+    Examples
+    --------
+    >>> pairs_true = np.array([[3,4],
+                               [5,6],
+                               [7,8]])
+    >>> pairs_test = np.array([[1,2],
+                               [3,4],
+                               [5,6]])
+    >>> score_method(pairs_true, pairs_test)
+    (0.5, 0.5, 0.25, 0.25)
+    """
+    
+    set_true = {tuple(e) for e in pairs_true}
+    set_test = {tuple(e) for e in pairs_test}
+    true_pos, false_pos, false_neg = confusion_stats(set_true, set_test)
+    
+    total = true_pos + false_pos + false_neg
+    true_pos_rate = true_pos / total
+    false_pos_rate = false_pos / total
+    false_neg_rate = false_neg / total
+    
+    return true_pos_rate, false_pos_rate, false_neg_rate
+
+
+
+# -
+
 def to_NetworkX(nodes, edges, attributes=None):
     """
     Convert tysserand network representation to a NetworkX network object
