@@ -100,6 +100,9 @@ def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
     """
     
     image = np.zeros((sy, sx))
+    # to overcome an issue with odd nb:
+    nb = int(np.ceil(nb / 2) * 2)
+    
     if regular:
         x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
         x = np.hstack((x[::2], x[1::2]))
@@ -314,6 +317,8 @@ def build_rdn(coords, r, **kwargs):
     pairs = np.sort(pairs, axis=1)
     pairs = np.unique(pairs, axis=0)
     return pairs
+
+
 
 def hyperdiagonal(coords):
     """
