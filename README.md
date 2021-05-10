@@ -1,10 +1,17 @@
 # tysserand
 
-A library for fast spatial network reconstruction.  
+Fast and accurate spatial networks reconstruction. 
+
+![](./images/tysserand_main_figure.png)
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
 You can find the preprint and supplementary information on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v1).  
 A turorial is available [here](./examples/02-tutorial.ipynb)
+
+*tysserand* is fast: it is 50 to more than 120 times faster than PySAL.  
+*tysserand* is accurate: it implements the best performing methods, tested on simulated and real bioimages.
+*tysserand* is user friendly and interactive: it integrates tools to choose appropriate parameters and facilitates the use of napari-based interactive image visualization and network annotation.
+*tysserand* is modular and opened to contributions: if you have an idea on how to improve reconstruction methods, create a particular one for a specific case, or make them even faster, join us!
 
 ## Installation
 
@@ -13,21 +20,27 @@ Simply do
 pip install tysserand
 ```
 
+To install a dedicated environment, if you already have conda you can use Mamba to do it pretty quickly:
+```bash
+conda install mamba -n base -c conda-forge
+mamba env create --file conda_env_tysserand-dev.yml 
+```
+
 ## Implemented methods
 
 ![Set of nodes](./images/publication_figures/mIF-nodes_positions.png)
 
 ### Delaunay triangulation
 
-This methods builds virtual cells centered arround each node and contacting each other to fully tile the space occupyied by the nodes. Edges are drawn between the nodes of contacting tiles.
+This method builds virtual cells centered arround each node and contacting each other to fully tile the space occupyied by the nodes. Edges are drawn between the nodes of contacting tiles.
 
-![Edge lengths with *Delaunay* reconstruction](./images/publication_figures/mIF-Delaunay_distances.png)
-![Trimmed network](./images/publication_figures/mIF-Delaunay_network.png)
-![Network overlay on original tissue image](./images/publication_figures/mIF-Delaunay_superimposed.png)
+![Edge lengths with *Delaunay* reconstruction](./images/publication_figures/mIF-Delaunay_distances.png)  
+![Trimmed network](./images/publication_figures/mIF-Delaunay_network.png)  
+![Network overlay on original tissue image](./images/publication_figures/mIF-Delaunay_superimposed.png)  
 
 ### k-nearest neighbors
 
-Each node is linked with its k nearest neighbors. It is the most common method used in single cell publications, althought it produces artifact well visible on simple 2D networks.
+Each node is linked with its k nearest neighbors. It is the most common method used in single cell publications, althought it produces artifacts well visible on simple 2D networks.
 
 ![Edge lengths with *k-nearest neighbors* reconstruction](./images/publication_figures/mIF-knn_distances.png)
 
@@ -41,5 +54,4 @@ Each node is linked to nodes closer than a threshold distance D, that is to say 
 
 Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.
 
-![Examplary data for the *Contacting areas* reconstruction](./images/publication_figures/generated-tissue-interger-masks.png)
-![Edge lengths with *Contacting areas* reconstruction](./images/publication_figures/generated-tissue-cell-contact-superimposition.png)
+![*Contacting areas* reconstruction](./images/publication_figures/simulated_segmentation_image_size-600_hole_proba-0.1_noise_sigma-10.0_objects_network.png)
