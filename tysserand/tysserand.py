@@ -15,6 +15,7 @@ from sklearn.neighbors import BallTree
 from skimage import morphology, feature, measure, segmentation, filters, color
 from scipy import ndimage as ndi
 from scipy.sparse import csr_matrix
+import cv2 as cv
 
 def make_simple_coords():
     """
@@ -162,7 +163,7 @@ def distance_neighbors(coords, pairs):
     distances = np.sqrt(distances.sum(axis=1))
     return distances
 
-def find_trim_dist(dist, method='percentile', param=99):
+def find_trim_dist(dist, method='percentile_size', nb_nodes=None, perc=99):
     """
     Find the distance threshold to eliminate reconstructed edges in a network.
 
@@ -171,21 +172,30 @@ def find_trim_dist(dist, method='percentile', param=99):
     dist : array
         Distances between pairs of nodes.
     method : str, optional
-        Method used to compute the threshold. The default is 'percentile'.
-    param : int or float, optional
-        For the 'percentile' method it is the percentile of distances used as 
-        the threshold. The default is 99.
+        Method used to compute the threshold. The default is 'percentile_size'.
+        This methods defines an optimal percentile value of distances above which
+        edges are discarded.
+    nb_nodes : int , optional
+        The number of nodes in the network used by the 'percentile_size' method.
+    perc : int or float, optional
+        The percentile of distances used as the threshold. The default is 99.
 
     Returns
     -------
     dist_thresh : float
         Threshold distance.
     """
-    if method == 'percentile':
-        dist_thresh = np.percentile(dist, param)
+    if method == 'percentile_size':
+        prop_edges = 4 / nb_nodes**(0.5)
+        perc = 100 * (1 - prop_edges * 0.5)
+        dist_thresh = np.percentile(dist, perc)
+            
+    elif method == 'percentile':
+        dist_thresh = np.percentile(dist, perc)
+        
     return dist_thresh
 
-def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=False):
+def build_delaunay(coords, trim_dist='percentile_size', perc=99, return_dist=False):
     """
     Reconstruct edges between nodes by Delaunay triangulation.
 
@@ -194,10 +204,9 @@ def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=Fa
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     trim_dist : str or float, optional
-        Method or distance used to delete reconstructed edges. The default is 'percentile'.
-    param : int or float, optional
-        For the 'percentile' method it is the percentile of distances used as 
-        the threshold. The default is 99.
+        Method or distance used to delete reconstructed edges. The default is 'percentile_size'.
+    perc : int or float, optional
+        The percentile of distances used as the threshold. The default is 99.
     return_dist : bool, optional
         Whether distances are returned, usefull to try sevral trimming methods and parameters. 
         The default is False.
@@ -219,7 +228,7 @@ def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=Fa
     if trim_dist is not False:
         dist = distance_neighbors(coords, pairs)
         if not isinstance(trim_dist, (int, float)):
-            trim_dist = find_trim_dist(dist=dist, method=trim_dist, param=trim_param)
+            trim_dist = find_trim_dist(dist=dist, method=trim_dist, nb_nodes=coords.shape[0], perc=perc)
         pairs = pairs[dist < trim_dist, :]
     return pairs
 
@@ -365,21 +374,16 @@ def find_neighbors(masks, i, r=1):
         values of nodes
     """
     
-    mask = masks == i
+    mask = np.uint8(masks == i)
     # create the border in which we'll look at other masks
-    if r == 1:
-        selem = morphology.square(3)
-    else:
-        selem = morphology.disk(r)
-    dilated = morphology.dilation(mask, selem)
-    border = np.logical_xor(mask, dilated)
+    kernel = morphology.disk(r)
+    dilated = cv.dilate(mask, kernel, iterations=1)
+    dilated = dilated.astype(np.bool)
     # detect potential touching masks
-    neighbors = np.unique(masks[border])
-    # if there is only background
-#     if neighbors.size == 1:
-#         return False
-#     else:
-#         return neighbors[neighbors != 0]
+    neighbors = np.unique(masks[dilated])
+    # discard the initial cell id of interest
+    neighbors = neighbors[neighbors != i]
+    # discard the background value
     return neighbors[neighbors != 0]
 
 def build_contacting(masks, r=1):
@@ -797,7 +801,6 @@ def pairs_to_df(pairs, columns=['source', 'target']):
     edges = pd.DataFrame(data=pairs, columns=columns)
     return edges
 
-# +
 def double_sort(data, last_var=0):
     """
     Sort twice an array, first on axis 1, then preserves
@@ -880,8 +883,6 @@ def score_method(pairs_true, pairs_test):
     return true_pos_rate, false_pos_rate, false_neg_rate
 
 
-
-# -
 
 def to_NetworkX(nodes, edges, attributes=None):
     """
