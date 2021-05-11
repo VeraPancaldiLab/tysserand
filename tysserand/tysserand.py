@@ -16,6 +16,7 @@ from skimage import morphology, feature, measure, segmentation, filters, color
 from scipy import ndimage as ndi
 from scipy.sparse import csr_matrix
 import cv2 as cv
+import napari
 
 def make_simple_coords():
     """
@@ -989,3 +990,187 @@ def add_to_AnnData(coords, pairs, adata):
                               'params': {'method': 'delaunay', 
                                          'metric': 'euclidean', 
                                          'edge_trimming': 'percentile 99'}}
+
+
+# --------------------------------------------------------------------
+# ------------- Interactive visualization and annotation -------------
+# --------------------------------------------------------------------
+
+
+def visualize(img):
+    """
+    Create a napari viewer instance with image splitted into
+    separate channels.
+    """
+
+    colormaps = [
+        'red',
+        'green',
+        'blue',
+    ]
+    viewer = napari.Viewer()
+    # add successively all channels
+    for i in range(img.shape[-1]):
+        # avoid the alpha channel of RGB images
+        if i == 3 and np.all(img[:, :, i] == 1):
+            pass
+        else:
+            if colormaps is not None and i < len(colormaps):
+                colormap = colormaps[i]
+            else:
+                colormap = 'gray'
+            viewer.add_image(img[:, :, i], name='ch' + str(i), colormap=colormap, blending='additive')
+    return viewer
+
+def get_annotation_names(layers):
+    """Detect the names of nodes and edges layers"""
+
+    layer_nodes_name = None
+    layer_edges_name = None
+    for layer in layers:
+        if isinstance(layer, napari.layers.points.points.Points):
+            layer_nodes_name = layer.name
+        elif isinstance(layer, napari.layers.shapes.shapes.Shapes):
+            layer_edges_name = layer.name
+        if layer_nodes_name is not None and layer_edges_name is not None:
+            break
+    return layer_nodes_name, layer_edges_name
+
+
+def make_annotation_dict(layers, layer_nodes_name, layer_edges_name):
+    """
+    Create a dictionnary of annotations
+    """
+
+    annotations = {}
+    if layer_nodes_name is not None:
+        annotations['nodes_coords'] = layers[layer_nodes_name].data
+        # pick a unique value instead of saving a 2D array of duplicates
+        annotations['nodes_size'] = np.median(layers[layer_nodes_name].size)
+        # ------ convert colors arrays into unique ids ------
+        colors = layers[layer_nodes_name].face_color
+        color_set = {tuple(e) for e in colors}
+        # mapper to convert ids into color tuples
+        id_color_mapper = dict(zip(range(len(color_set)), color_set))
+        # mapper to convert color tuples into ids
+        color_id_mapper = {val: key for key, val in id_color_mapper.items()}
+        ids = np.array([color_id_mapper[tuple(key)] for key in colors])
+        # colors = np.array([id_color_mapper[key] for key in ids])
+        annotations['nodes_color_ids'] = ids
+        annotations['nodes_id_color_mapper'] = id_color_mapper
+    if layer_edges_name is not None:
+        annotations['edges_coords'] = layers[layer_edges_name].data
+        annotations['edges_edge_width'] = np.median(layers[layer_edges_name].edge_width)
+        # TODO: implement edge color mapper
+        # annotations['edges_edge_colors'] = layers[layer_edges_name].edge_color
+    return annotations
+
+def save_annotations(layers, path, layer_names=None):
+    """"
+    Create and save annotations in the layers of a napari viewer.
+    """
+    if layer_names is not None:
+        layer_nodes_name, layer_edges_name = layer_names
+    else:
+        layer_nodes_name, layer_edges_name = get_annotation_names(layers)
+    annotations = make_annotation_dict(layers, layer_nodes_name, layer_edges_name)
+    joblib.dump(annotations, path);
+    return
+
+def add_nodes(
+    viewer, 
+    annotations,
+    name='nodes',
+    ):
+    """
+    Add nodes annotations in a napari viewer.
+    """
+    if 'nodes_coords' in annotations.keys():
+        viewer.add_points(
+            annotations['nodes_coords'],
+            # reconstruct the colors array
+            face_color=np.array([annotations['nodes_id_color_mapper'][key] for key in annotations['nodes_color_ids']]),
+            size=annotations['nodes_size'],
+            name=name,
+            )
+    return
+
+def add_edges(
+    viewer, 
+    annotations,
+    edge_color='white',
+    name='edges',
+    ):
+    """
+    Add edges annotations in a napari viewer.
+    """
+    if 'edges_coords' in annotations.keys():
+        viewer.add_shapes(
+            annotations['edges_coords'], 
+            shape_type='line', 
+            edge_width=annotations['edges_edge_width'],
+            edge_color=edge_color,
+            name=name,
+        )
+
+def add_annotations(
+    viewer,
+    annotations,
+    name_layer_nodes='nodes',
+    name_layer_edges='edges',
+    edge_color='white',
+    ):
+    """
+    Add nodes and edges annotations in a napari viewer.
+    """
+
+    add_nodes(viewer, annotations, name=name_layer_nodes)
+    add_edges(viewer, annotations, edge_color=edge_color, name=name_layer_edges)
+    return
+
+def assign_nodes_to_edges(nodes, edges):
+    """
+    Link edges extremities to nodes and compute the matrix
+    of pairs of ndoes indices.
+    """
+
+    from scipy.spatial import cKDTree
+    
+    edges_arr = np.vstack(edges)
+    kdt_nodes = cKDTree(nodes)
+
+    # closest node id and discard computed distances ('_,')
+    _, pairs = kdt_nodes.query(x=edges_arr, k=1)
+    # refactor list of successive ids for start and end of edges into 2D array
+    pairs = np.vstack((pairs[::2], pairs[1::2])).T
+
+    new_edges = []
+    for pair in pairs[:,:]:
+        new_edges.append(np.array(nodes[pair]))
+    
+    return new_edges, pairs
+
+def update_edges(
+    viewer, 
+    new_edges, 
+    layer_names=None,
+    edge_color='white',
+    name='edges',
+    ):    
+    """
+    Replace edges annotations with new ones in a napari viewer.
+    """
+
+    if layer_names is not None:
+        layer_nodes_name, layer_edges_name = layer_names
+    else:
+        layer_nodes_name, layer_edges_name = get_annotation_names(viewer.layers)
+    
+    del viewer.layers[layer_edges_name]
+    viewer.add_shapes(
+        new_edges, 
+        shape_type='line', 
+        edge_width=annotations['edges_edge_width'],
+        edge_color=edge_color,
+        name=name,
+    )
