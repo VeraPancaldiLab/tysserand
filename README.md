@@ -23,7 +23,7 @@ pip install tysserand
 To install a dedicated environment, if you already have conda you can use Mamba to do it pretty quickly:
 ```bash
 conda install mamba -n base -c conda-forge
-mamba env create --file conda_env_tysserand-dev.yml 
+mamba env create --file conda_env_spatial-networks.yml 
 ```
 
 ## Implemented methods

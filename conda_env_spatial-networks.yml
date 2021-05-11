@@ -12,11 +12,14 @@ dependencies:
   - pathlib
   - python==3.7
   - scikit-learn
+  - scikit-image
   - numpy
   - hdbscan
   - umap-learn
   - dask
-  - spyder-kernels
   - networkx
   - igraph
-prefix: /home/alexis/Programmes/Anaconda/envs/spatial-networks
+  - pysal
+  - geopandas
+  - opencv
+  - napari

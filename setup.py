@@ -6,7 +6,7 @@ here = path.abspath(path.dirname(__file__))
 
 long_description = """# tysserand
 
-A library for fast spatial network reconstruction.  
+A library for fast and accurate spatial network reconstruction.  
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
 You can find the preprint and supplementary information on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v1).  
@@ -33,10 +33,10 @@ Nodes are the center of detected objects (like after cell segmentation) and they
 
 setup(
     name="tysserand",
-    version="0.1.0",
+    version="0.2.0",
     author="Alexis Coullomb",
     author_email="alexis.coullomb.pro@gmail.com",
-    description="Fast reconstruction of spatial networks from bioimages",
+    description="Fast and accurate reconstruction of spatial networks from bioimages",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/VeraPancaldiLab/tysserand",

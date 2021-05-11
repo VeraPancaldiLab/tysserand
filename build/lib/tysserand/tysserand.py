@@ -15,6 +15,8 @@ from sklearn.neighbors import BallTree
 from skimage import morphology, feature, measure, segmentation, filters, color
 from scipy import ndimage as ndi
 from scipy.sparse import csr_matrix
+import cv2 as cv
+import napari
 
 def make_simple_coords():
     """
@@ -100,6 +102,9 @@ def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
     """
     
     image = np.zeros((sy, sx))
+    # to overcome an issue with odd nb:
+    nb = int(np.ceil(nb / 2) * 2)
+    
     if regular:
         x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
         x = np.hstack((x[::2], x[1::2]))
@@ -159,7 +164,7 @@ def distance_neighbors(coords, pairs):
     distances = np.sqrt(distances.sum(axis=1))
     return distances
 
-def find_trim_dist(dist, method='percentile', param=99):
+def find_trim_dist(dist, method='percentile_size', nb_nodes=None, perc=99):
     """
     Find the distance threshold to eliminate reconstructed edges in a network.
 
@@ -168,21 +173,30 @@ def find_trim_dist(dist, method='percentile', param=99):
     dist : array
         Distances between pairs of nodes.
     method : str, optional
-        Method used to compute the threshold. The default is 'percentile'.
-    param : int or float, optional
-        For the 'percentile' method it is the percentile of distances used as 
-        the threshold. The default is 99.
+        Method used to compute the threshold. The default is 'percentile_size'.
+        This methods defines an optimal percentile value of distances above which
+        edges are discarded.
+    nb_nodes : int , optional
+        The number of nodes in the network used by the 'percentile_size' method.
+    perc : int or float, optional
+        The percentile of distances used as the threshold. The default is 99.
 
     Returns
     -------
     dist_thresh : float
         Threshold distance.
     """
-    if method == 'percentile':
-        dist_thresh = np.percentile(dist, param)
+    if method == 'percentile_size':
+        prop_edges = 4 / nb_nodes**(0.5)
+        perc = 100 * (1 - prop_edges * 0.5)
+        dist_thresh = np.percentile(dist, perc)
+            
+    elif method == 'percentile':
+        dist_thresh = np.percentile(dist, perc)
+        
     return dist_thresh
 
-def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=False):
+def build_delaunay(coords, trim_dist='percentile_size', perc=99, return_dist=False):
     """
     Reconstruct edges between nodes by Delaunay triangulation.
 
@@ -191,10 +205,9 @@ def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=Fa
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     trim_dist : str or float, optional
-        Method or distance used to delete reconstructed edges. The default is 'percentile'.
-    param : int or float, optional
-        For the 'percentile' method it is the percentile of distances used as 
-        the threshold. The default is 99.
+        Method or distance used to delete reconstructed edges. The default is 'percentile_size'.
+    perc : int or float, optional
+        The percentile of distances used as the threshold. The default is 99.
     return_dist : bool, optional
         Whether distances are returned, usefull to try sevral trimming methods and parameters. 
         The default is False.
@@ -216,7 +229,7 @@ def build_delaunay(coords, trim_dist='percentile', trim_param=99, return_dist=Fa
     if trim_dist is not False:
         dist = distance_neighbors(coords, pairs)
         if not isinstance(trim_dist, (int, float)):
-            trim_dist = find_trim_dist(dist=dist, method=trim_dist, param=trim_param)
+            trim_dist = find_trim_dist(dist=dist, method=trim_dist, nb_nodes=coords.shape[0], perc=perc)
         pairs = pairs[dist < trim_dist, :]
     return pairs
 
@@ -315,6 +328,8 @@ def build_rdn(coords, r, **kwargs):
     pairs = np.unique(pairs, axis=0)
     return pairs
 
+
+
 def hyperdiagonal(coords):
     """
     Compute the maximum possible distance from a set of coordinates as the
@@ -336,7 +351,7 @@ def hyperdiagonal(coords):
     dist = (maxi - mini)**2
     dist = np.sqrt(dist.sum())
     return dist
-    
+
 
 def find_neighbors(masks, i, r=1):
     """
@@ -360,21 +375,16 @@ def find_neighbors(masks, i, r=1):
         values of nodes
     """
     
-    mask = masks == i
+    mask = np.uint8(masks == i)
     # create the border in which we'll look at other masks
-    if r == 1:
-        selem = morphology.square(3)
-    else:
-        selem = morphology.disk(r)
-    dilated = morphology.dilation(mask, selem)
-    border = np.logical_xor(mask, dilated)
+    kernel = morphology.disk(r)
+    dilated = cv.dilate(mask, kernel, iterations=1)
+    dilated = dilated.astype(np.bool)
     # detect potential touching masks
-    neighbors = np.unique(masks[border])
-    # if there is only background
-#     if neighbors.size == 1:
-#         return False
-#     else:
-#         return neighbors[neighbors != 0]
+    neighbors = np.unique(masks[dilated])
+    # discard the initial cell id of interest
+    neighbors = neighbors[neighbors != i]
+    # discard the background value
     return neighbors[neighbors != 0]
 
 def build_contacting(masks, r=1):
@@ -458,8 +468,12 @@ def refactor_coords_pairs(coords, pairs):
         Pairs of neighbors given by the first and second element of each row.
     """
     
+    mapper = dict(zip(coords.index, np.arange(coords.shape[0])))
+    pairs = pd.DataFrame({'source': pairs[:,0], 'target': pairs[:,1]})
+    pairs['source'] = pairs['source'].map(mapper)
+    pairs['target'] = pairs['target'].map(mapper)
     coords = coords.loc[:, ['x', 'y']].values
-    pairs = pairs - 1
+    pairs = pairs.loc[:, ['source', 'target']].values
     return coords, pairs
 
 def rescale(data, perc_mini=1, perc_maxi=99, 
@@ -787,7 +801,90 @@ def pairs_to_df(pairs, columns=['source', 'target']):
 
     edges = pd.DataFrame(data=pairs, columns=columns)
     return edges
-       
+
+def double_sort(data, last_var=0):
+    """
+    Sort twice an array, first on axis 1, then preserves
+    whole rows and sort by one column on axis 0.
+    Usefull to compare pairs of nodes obtained
+    with different methods.
+
+    Parameters
+    ----------
+    data : 2D array
+        Data to sort.
+    last_var : int, optional. The default is 0.
+        Column by which intact rows are sorted.
+
+    Returns
+    -------
+    data : 2D array
+        Sorted data.
+        
+    Examples
+    --------
+    >>> pairs = np.array([[4,3],
+                          [5,6],
+                          [2,1]])
+    >>> double_sort(pairs)
+    array([[1, 2],
+           [3, 4],
+           [5, 6]])
+    """
+    
+    # doing simply np.sort(np.sort(pairs, axis=1), axis=0)
+    # would uncouple first and second elements of pairs
+    # during the second sorting (axis=0)
+    data = np.sort(data, axis=1)
+    x_sort = np.argsort(data[:, 0])
+    data = data[x_sort]
+    
+    return data
+
+def confusion_stats(set_true, set_test):
+    """
+    Count the true positives, false positives and false
+    negatives in a test set with respect to a "true" set. 
+    True negatives are not counted.
+    """
+    true_pos = len(set_true.intersection(set_test))
+    false_pos = len(set_test.difference(set_true))
+    false_neg = len(set_true.difference(set_test))
+    
+    return true_pos, false_pos, false_neg
+
+
+def score_method(pairs_true, pairs_test):
+    """
+    Compute a performance score from the counts of
+    true positives, false positives and false negatives
+    of predicted pairs of nodes that are "double sorted".
+    
+    Examples
+    --------
+    >>> pairs_true = np.array([[3,4],
+                               [5,6],
+                               [7,8]])
+    >>> pairs_test = np.array([[1,2],
+                               [3,4],
+                               [5,6]])
+    >>> score_method(pairs_true, pairs_test)
+    (0.5, 0.5, 0.25, 0.25)
+    """
+    
+    set_true = {tuple(e) for e in pairs_true}
+    set_test = {tuple(e) for e in pairs_test}
+    true_pos, false_pos, false_neg = confusion_stats(set_true, set_test)
+    
+    total = true_pos + false_pos + false_neg
+    true_pos_rate = true_pos / total
+    false_pos_rate = false_pos / total
+    false_neg_rate = false_neg / total
+    
+    return true_pos_rate, false_pos_rate, false_neg_rate
+
+
+
 def to_NetworkX(nodes, edges, attributes=None):
     """
     Convert tysserand network representation to a NetworkX network object
@@ -893,3 +990,187 @@ def add_to_AnnData(coords, pairs, adata):
                               'params': {'method': 'delaunay', 
                                          'metric': 'euclidean', 
                                          'edge_trimming': 'percentile 99'}}
+
+
+# --------------------------------------------------------------------
+# ------------- Interactive visualization and annotation -------------
+# --------------------------------------------------------------------
+
+
+def visualize(img):
+    """
+    Create a napari viewer instance with image splitted into
+    separate channels.
+    """
+
+    colormaps = [
+        'red',
+        'green',
+        'blue',
+    ]
+    viewer = napari.Viewer()
+    # add successively all channels
+    for i in range(img.shape[-1]):
+        # avoid the alpha channel of RGB images
+        if i == 3 and np.all(img[:, :, i] == 1):
+            pass
+        else:
+            if colormaps is not None and i < len(colormaps):
+                colormap = colormaps[i]
+            else:
+                colormap = 'gray'
+            viewer.add_image(img[:, :, i], name='ch' + str(i), colormap=colormap, blending='additive')
+    return viewer
+
+def get_annotation_names(layers):
+    """Detect the names of nodes and edges layers"""
+
+    layer_nodes_name = None
+    layer_edges_name = None
+    for layer in layers:
+        if isinstance(layer, napari.layers.points.points.Points):
+            layer_nodes_name = layer.name
+        elif isinstance(layer, napari.layers.shapes.shapes.Shapes):
+            layer_edges_name = layer.name
+        if layer_nodes_name is not None and layer_edges_name is not None:
+            break
+    return layer_nodes_name, layer_edges_name
+
+
+def make_annotation_dict(layers, layer_nodes_name, layer_edges_name):
+    """
+    Create a dictionnary of annotations
+    """
+
+    annotations = {}
+    if layer_nodes_name is not None:
+        annotations['nodes_coords'] = layers[layer_nodes_name].data
+        # pick a unique value instead of saving a 2D array of duplicates
+        annotations['nodes_size'] = np.median(layers[layer_nodes_name].size)
+        # ------ convert colors arrays into unique ids ------
+        colors = layers[layer_nodes_name].face_color
+        color_set = {tuple(e) for e in colors}
+        # mapper to convert ids into color tuples
+        id_color_mapper = dict(zip(range(len(color_set)), color_set))
+        # mapper to convert color tuples into ids
+        color_id_mapper = {val: key for key, val in id_color_mapper.items()}
+        ids = np.array([color_id_mapper[tuple(key)] for key in colors])
+        # colors = np.array([id_color_mapper[key] for key in ids])
+        annotations['nodes_color_ids'] = ids
+        annotations['nodes_id_color_mapper'] = id_color_mapper
+    if layer_edges_name is not None:
+        annotations['edges_coords'] = layers[layer_edges_name].data
+        annotations['edges_edge_width'] = np.median(layers[layer_edges_name].edge_width)
+        # TODO: implement edge color mapper
+        # annotations['edges_edge_colors'] = layers[layer_edges_name].edge_color
+    return annotations
+
+def save_annotations(layers, path, layer_names=None):
+    """"
+    Create and save annotations in the layers of a napari viewer.
+    """
+    if layer_names is not None:
+        layer_nodes_name, layer_edges_name = layer_names
+    else:
+        layer_nodes_name, layer_edges_name = get_annotation_names(layers)
+    annotations = make_annotation_dict(layers, layer_nodes_name, layer_edges_name)
+    joblib.dump(annotations, path);
+    return
+
+def add_nodes(
+    viewer, 
+    annotations,
+    name='nodes',
+    ):
+    """
+    Add nodes annotations in a napari viewer.
+    """
+    if 'nodes_coords' in annotations.keys():
+        viewer.add_points(
+            annotations['nodes_coords'],
+            # reconstruct the colors array
+            face_color=np.array([annotations['nodes_id_color_mapper'][key] for key in annotations['nodes_color_ids']]),
+            size=annotations['nodes_size'],
+            name=name,
+            )
+    return
+
+def add_edges(
+    viewer, 
+    annotations,
+    edge_color='white',
+    name='edges',
+    ):
+    """
+    Add edges annotations in a napari viewer.
+    """
+    if 'edges_coords' in annotations.keys():
+        viewer.add_shapes(
+            annotations['edges_coords'], 
+            shape_type='line', 
+            edge_width=annotations['edges_edge_width'],
+            edge_color=edge_color,
+            name=name,
+        )
+
+def add_annotations(
+    viewer,
+    annotations,
+    name_layer_nodes='nodes',
+    name_layer_edges='edges',
+    edge_color='white',
+    ):
+    """
+    Add nodes and edges annotations in a napari viewer.
+    """
+
+    add_nodes(viewer, annotations, name=name_layer_nodes)
+    add_edges(viewer, annotations, edge_color=edge_color, name=name_layer_edges)
+    return
+
+def assign_nodes_to_edges(nodes, edges):
+    """
+    Link edges extremities to nodes and compute the matrix
+    of pairs of ndoes indices.
+    """
+
+    from scipy.spatial import cKDTree
+    
+    edges_arr = np.vstack(edges)
+    kdt_nodes = cKDTree(nodes)
+
+    # closest node id and discard computed distances ('_,')
+    _, pairs = kdt_nodes.query(x=edges_arr, k=1)
+    # refactor list of successive ids for start and end of edges into 2D array
+    pairs = np.vstack((pairs[::2], pairs[1::2])).T
+
+    new_edges = []
+    for pair in pairs[:,:]:
+        new_edges.append(np.array(nodes[pair]))
+    
+    return new_edges, pairs
+
+def update_edges(
+    viewer, 
+    new_edges, 
+    layer_names=None,
+    edge_color='white',
+    name='edges',
+    ):    
+    """
+    Replace edges annotations with new ones in a napari viewer.
+    """
+
+    if layer_names is not None:
+        layer_nodes_name, layer_edges_name = layer_names
+    else:
+        layer_nodes_name, layer_edges_name = get_annotation_names(viewer.layers)
+    
+    del viewer.layers[layer_edges_name]
+    viewer.add_shapes(
+        new_edges, 
+        shape_type='line', 
+        edge_width=annotations['edges_edge_width'],
+        edge_color=edge_color,
+        name=name,
+    )
