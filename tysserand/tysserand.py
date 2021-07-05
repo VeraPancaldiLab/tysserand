@@ -276,7 +276,7 @@ def build_knn(coords, k=6, **kwargs):
     """
     
     tree = BallTree(coords, **kwargs)
-    _, ind = tree.query(coords, k=k)
+    _, ind = tree.query(coords, k=k+1) # the first k is "oneself"
     pairs = pairs_from_knn(ind)
     return pairs
 
