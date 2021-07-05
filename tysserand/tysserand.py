@@ -5,11 +5,6 @@ import matplotlib as mpl
 import seaborn as sns
 import os
 import itertools
-import libpysal
-from libpysal.cg.voronoi  import voronoi, voronoi_frames
-from libpysal.weights import Queen, Rook
-import geopandas
-
 from scipy.spatial import Voronoi
 from sklearn.neighbors import BallTree
 from skimage import morphology, feature, measure, segmentation, filters, color
@@ -328,8 +323,6 @@ def build_rdn(coords, r, **kwargs):
     pairs = np.unique(pairs, axis=0)
     return pairs
 
-
-
 def hyperdiagonal(coords):
     """
     Compute the maximum possible distance from a set of coordinates as the
@@ -351,7 +344,6 @@ def hyperdiagonal(coords):
     dist = (maxi - mini)**2
     dist = np.sqrt(dist.sum())
     return dist
-
 
 def find_neighbors(masks, i, r=1):
     """
@@ -474,6 +466,56 @@ def refactor_coords_pairs(coords, pairs):
     pairs['target'] = pairs['target'].map(mapper)
     coords = coords.loc[:, ['x', 'y']].values
     pairs = pairs.loc[:, ['source', 'target']].values
+    return coords, pairs
+
+def build_contacting_nn(masks, r=1, k=3):
+    """
+    Build a network from segmented regions as a mix between
+    the contacting area method, that can output some nodes
+    edges, and the nearest neighbors method that will link
+    these nodes to their neighbors.
+
+    Parameters
+    ----------
+    masks : array_like
+        2D array of integers defining the identity of masks
+        0 is background (no object detected)
+    r : int
+        Radius of search for the contacting area method. The default is 1.
+    k : int, optional
+        Number of nearest neighbors. The default is 3.
+   
+
+    Returns
+    -------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    pairs : ndarray
+        Pairs of neighbors given by the first and second element of each row,
+        values correspond to values in masks, which are different from index
+        values of nodes
+    """
+   
+    pairs = build_contacting(masks, r=r)
+    # reencode the coordinates to match node positions with their respective areas
+    coords = mask_val_coord(masks)
+    coords, pairs = refactor_coords_pairs(coords, pairs)
+   
+    # ------ detect if some nodes have no edges ------
+    uniq_nodes = set(range(coords.shape[0]))
+    uniq_pairs = set(np.unique(pairs))
+    # nodes that have no edge
+    solitaries = uniq_nodes.difference(uniq_pairs)
+    if solitaries == set():
+        print("all nodes have at least one edge")
+    else:
+        print(f"there are {len(solitaries)}/{coords.shape[0]} nodes with no edges")
+        nn_pairs = build_NN(coords, k=k)
+        # for each lonely node, add its edges with the knn neighbors
+        for i in solitaries:
+            select = np.logical_or(nn_pairs[:, 0] == i, nn_pairs[:, 1] == i)
+            pairs = np.vstack(pairs, nn_pairs[select, :])
+       
     return coords, pairs
 
 def rescale(data, perc_mini=1, perc_maxi=99, 
