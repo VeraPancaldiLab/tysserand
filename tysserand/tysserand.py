@@ -12,6 +12,8 @@ from scipy import ndimage as ndi
 from scipy.sparse import csr_matrix
 import cv2 as cv
 import napari
+import dask
+from dask.distributed import Client, LocalCluster
 
 def make_simple_coords():
     """
@@ -517,6 +519,312 @@ def build_contacting_nn(masks, r=1, k=3):
             pairs = np.vstack(pairs, nn_pairs[select, :])
        
     return coords, pairs
+
+# ------ Parallelized version of build_contacting ------
+
+def choose_optimal_image_split(im, method='im_size', min_tile_size=360000):
+    """
+    Compute the optimal number of splits of an image
+    to run in parallel a function of each core.
+
+    Parameters
+    ----------
+    im : array_like
+        2D array of integers defining the identity of segmented objects
+        0 is background (no object detected)
+    method : str, optional
+        The method used to define the optimal number of splits.
+        The default is 'im_size'.
+    min_tile_size : int
+        Minimum number of bytes of tiles.
+        The default is 360000.
+
+    Returns
+    -------
+    n_splits : int
+        The optimal number of splits.
+    
+    Example
+    -------
+    >>> im = np.zeros((1024, 1024), dtype=np.int32)
+    >>> n_splits = choose_optimal_image_split(im)
+    
+    Notes
+    -----
+    One would ideally consider the number of cores, the size of the image
+    and the number of detected objects.
+    The number of splits should be essentially driven by the size of
+    the image and the number of cores.
+    The number of splits shouldn't be superior to the number of cores,
+    otherwise some cores will wait for the last tiles to be processed
+    by other cores, while increasing the inter-process communication
+    by too many splits. 
+    Ideally n_splits should be a power of 2 in order to split easily 
+    the image.
+    """
+    
+    n_cores = os.cpu_count()
+    # number of segmented objects, drop the background value
+    n_obj = np.unique(im).size - 1
+    
+    if method == 'im_size':
+        # avoid too many splits if image is not so big
+        im_size = im.nbytes # slightly different from sys.getsizeof(im)
+        # max power of 2
+        max_i = int(np.log2(n_cores)) + 1
+        n_splits = 1
+        for i in range(1, max_i):
+            new_split = 2**i
+            if im_size / new_split >= min_tile_size:
+                n_splits = new_split
+            else:
+                break
+    elif method == 'naive':
+        n_splits = n_cores
+    
+    return n_splits
+
+def split_range(r, n):
+    """
+    Computes the indices of segments after splitting a range of r values
+    into n segments.
+
+    Parameters
+    ----------
+    r : int
+        Size of the range vector.
+    n : int
+        The number of splits.
+
+    Returns
+    -------
+    segments : list
+        The list of lists of first and last indices of segments.
+    
+    Example
+    -------
+    >>> split_range(8, 2)
+    [[0, 4], [4, 8]]
+    """
+    
+    step = int(r / n)
+    segments = []
+    for i in range(n):
+        new_segment = [step * i, step * (i + 1)]
+        segments.append(new_segment)
+    # correct the gap in the missing index due to the truncated step
+    segments[-1][-1] = r
+    return segments
+
+def extend_indices(segments, margin):
+    """
+    Decrease and increase the values of the first and last elements
+    respectively in each list of segments by a given margin.
+    The first indice of the first segment and the last indice of the
+    last segments are not modified.
+
+    Parameters
+    ----------
+    segments : list
+        The list of lists of first and last indices of segments.
+    margin : int
+        The extra extend to add on each side of segments.
+    
+    Example
+    -------
+    >>> segments = split_range(16, 4)
+    >>> extend_indices(segments, margin=1)
+    [[0, 5], [3, 9], [7, 13], [11, 16]]
+    """
+    
+    if len(segments) == 1:
+        return segments
+    else:
+        # first process the first and last segments
+        segments[0][-1] += margin
+        segments[-1][0] -= margin
+        # if there are more than 2 segments
+        for i in range(len(segments))[1:-1]:
+            segments[i][0] -= margin
+            segments[i][-1] += margin
+    return segments        
+
+def make_tiles_limits(im, n_splits, margin=0):
+    """
+    Compute the indices in an image to split it into several tiles.
+
+    Parameters
+    ----------
+    im : array_like
+        2D array of integers defining the identity of segmented objects
+        0 is background (no object detected)
+    n_splits : int
+        The number of splits.
+    margin : int
+        The extra space to include at the border of tiles.
+        The default is 0.
+
+    Returns
+    -------
+    tiles_indices : list
+        The list of indices [[xmin, xmax], [ymin, ymax]] for each tile.
+        
+    Example
+    -------
+    >>> im = np.arange(16 * 8).reshape(16, 8)
+    >>> make_tiles_limits(im, 4, margin=0)
+    [[0, 4, 0, 8], [0, 4, 8, 16], [4, 8, 0, 8], [4, 8, 8, 16]]
+    >>> make_tiles_limits(im, 4, margin=1)
+    [[0, 5, 0, 9], [0, 5, 7, 16], [3, 8, 0, 9], [3, 8, 7, 16]]
+    """
+    
+    if n_splits == 1:
+        return [0, im.shape[1], 0, im.shape[0]]
+    # number of splits per axis
+    ax_splits = int(np.log2(n_splits))
+    x_segments = split_range(im.shape[1], ax_splits)
+    y_segments = split_range(im.shape[0], ax_splits)
+    
+    if margin > 0:
+        x_segments = extend_indices(x_segments, margin=margin)
+        y_segments = extend_indices(y_segments, margin=margin)
+    
+    # make combinations of [xmin, xmax, ymin, ymax] indices of tiles
+    tiles_indices = []
+    for xlim in x_segments:
+        for ylim in y_segments:
+            tiles_indices.append(xlim + ylim)
+    return tiles_indices
+
+def extract_tile(im, limits):
+    """
+    Extract a tile from an image given
+    its [xmin, xmax, ymin, ymax] limit indices.
+
+    Parameters
+    ----------
+    im : array_like
+        2D array of integers defining the identity of segmented objects
+        0 is background (no object detected)
+    limits : list
+        The list of limit indices [xmin, xmax, ymin, ymax].
+
+    Returns
+    -------
+    tile : array_like
+        The extracted tile.
+        
+    Example
+    -------
+    >>> im = np.arange(8 * 8).reshape(8, 8)
+    >>> tiles_indices = make_tiles_limits(im, 4, margin=0)
+    >>> extract_tiles(im, tiles_indices[-1])
+    array([[36, 37, 38, 39],
+           [44, 45, 46, 47],
+           [52, 53, 54, 55],
+           [60, 61, 62, 63]])
+    """
+    
+    tile = im[limits[0]: limits[1], limits[2]: limits[3]]
+    return tile
+
+def merge_pairs(lpairs):
+    """
+    Merge a list of Nx2 arrays into a single N'x2 array.
+
+    Parameters
+    ----------
+    lpairs : list
+        The list of detected edges as 2D arrays.
+    
+    Returns
+    -------
+    pairs : array_like
+        The merged detected edges.
+    
+    
+    >>> a = np.arange(4).reshape(-1, 2)
+    >>> b = a + 2
+    >>> lpairs = [a, b]
+    >>> np.unique(np.vstack(lpairs), axis=0)
+    array([[0, 1],
+           [2, 3],
+           [4, 5]])
+    """
+    
+    pairs = np.unique(np.vstack(lpairs), axis=0)
+    return pairs
+
+def build_contacting_parallel(im, r=1, split_method='im_size', min_tile_size=360000):
+    """
+    Build a network from segmented regions that contact each other or are 
+    within a given distance from each other.
+
+    Parameters
+    ----------
+    im : array_like
+        2D array of integers defining the identity of masks
+        0 is background (no object detected)
+    r : int
+        Radius of search.
+    split_method : str, optional
+        The method used to define the optimal number of splits.
+        The default is 'im_size'.
+    min_tile_size : int
+        Minimum number of bytes of tiles.
+        The default is 360000.
+
+    Returns
+    -------
+    pairs : ndarray
+        Pairs of neighbors given by the first and second element of each row, 
+        values correspond to values in masks, which are different from index
+        values of nodes
+        
+    Example
+    -------
+    >>> # generate the tissue image
+    >>> coords, masks = ty.make_random_tiles(sx=600, sy=600, nb=12, noise_sigma=10.0)
+    >>> # erase some segmented objects
+    >>> if hole_proba != 0:
+    >>>     for i in np.unique(masks):
+    >>>         if np.random.rand() > (1 - hole_proba):
+    >>>             masks[masks == i] = 0
+    >>> 
+    >>> # ------ Contacting areas method ------
+    >>> pairs = ty.build_contacting(masks)
+    >>> coords = ty.mask_val_coord(masks)
+    >>> coords, pairs_true = ty.refactor_coords_pairs(coords, pairs)
+    >>> 
+    >>> # ------ Parallel version ------
+    >>> paral_pairs = build_contacting_parallel(im)
+    >>> # check that detected edges are identical
+    >>> pairs = np.sort(pairs, axis=1)
+    >>> paral_pairs = np.sort(paral_pairs, axis=1)
+    >>> print(np.all(paral_pairs == pairs))
+    """
+    
+    n_splits = choose_optimal_image_split(im, method=split_method, min_tile_size=min_tile_size)
+    segments = make_tiles_limits(im, n_splits, margin=r)
+    
+    cluster = LocalCluster(
+        n_workers=16,
+        threads_per_worker=1,
+    )
+    client = Client(cluster)
+    
+    # list of pairs computed for each tile
+    lpairs = []
+    for limits in segments:
+        tile = dask.delayed(extract_tile)(im, limits)
+        pairs = dask.delayed(build_contacting)(tile, r=r)
+        lpairs.append(pairs)
+    # merge all pairs
+    pairs = dask.delayed(merge_pairs)(lpairs)
+    pairs = pairs.compute()
+    return pairs
+
+# ------ end of parallel build_contacting ------
 
 def rescale(data, perc_mini=1, perc_maxi=99, 
             out_mini=0, out_maxi=1, 
@@ -1173,7 +1481,7 @@ def add_annotations(
 def assign_nodes_to_edges(nodes, edges):
     """
     Link edges extremities to nodes and compute the matrix
-    of pairs of ndoes indices.
+    of pairs of nodes indices.
     """
 
     from scipy.spatial import cKDTree
