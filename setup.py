@@ -10,7 +10,7 @@ A library for fast and accurate spatial network reconstruction.
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
 You can find the preprint and supplementary information on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v1).  
-A turorial is available in the [GitHub repository](https://github.com/VeraPancaldiLab/tysserand/blob/master/examples/02-tutorial.ipynb)
+A turorial is available in the [GitHub repository](https://github.com/VeraPancaldiLab/tysserand).
 
 ## Implemented methods
 
@@ -28,12 +28,17 @@ Each node is linked to nodes closer than a threshold distance D, that is to say 
 
 ### Area contact
 
-Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.
+Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.  
+A parallelized version is implemented with the Dask library.
+
+### Area contact *and* k-nearest neighbors
+
+Areas are linked if they are in contact or closer than a given distance. Then, the remaining non connected areas are connected with their nearest neighbors.
 """
 
 setup(
     name="tysserand",
-    version="0.2.0",
+    version="0.3.0",
     author="Alexis Coullomb",
     author_email="alexis.coullomb.pro@gmail.com",
     description="Fast and accurate reconstruction of spatial networks from bioimages",

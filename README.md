@@ -1,11 +1,11 @@
 # tysserand
 
-Fast and accurate spatial networks reconstruction. 
+Fast and accurate spatial networks reconstruction.
 
 ![](./images/tysserand_main_figure.png)
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
-You can find the preprint and supplementary information on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v1).  
+You can find the article and supplementary information on [Bioinformatics](https://doi.org/10.1093/bioinformatics/btab490), and the freely available preprint (same text!) is on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v2).  
 A turorial is available [here](./examples/02-tutorial.ipynb)
 
 *tysserand* is fast: it is 50 to more than 120 times faster than PySAL.  
@@ -23,8 +23,9 @@ pip install tysserand
 To install a dedicated environment, if you already have conda you can use Mamba to do it pretty quickly:
 ```bash
 conda install mamba -n base -c conda-forge
-mamba env create --file conda_env_spatial-networks.yml 
+mamba env create --file conda_env_spatial-networks.yml
 ```
+But ideally use pyenv + virtualenvs + poetry for better reproducibility and full open source stack (detailedexplanations coming soon).
 
 ## Implemented methods
 
@@ -52,6 +53,11 @@ Each node is linked to nodes closer than a threshold distance D, that is to say 
 
 ### Area contact
 
-Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.
+Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.  
+A parallelized version is implemented with the Dask library.
 
 ![*Contacting areas* reconstruction](./images/publication_figures/simulated_segmentation_image_size-600_hole_proba-0.1_noise_sigma-10.0_objects_network.png)
+
+### Area contact *and* k-nearest neighbors
+
+Areas are linked if they are in contact or closer than a given distance. Then, the remaining non connected areas are connected with their nearest neighbors.
