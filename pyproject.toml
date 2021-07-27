@@ -19,9 +19,9 @@ scikit-image = "*"
 numpy = "*"
 hdbscan = "*"
 umap-learn = "*"
-dask = "*"
-opencv-python = "*"
-napari = "*"
+dask = {extras = ["complete"], version = "^2021.7.1"}
+opencv-python-headless = "*"
+napari = {extras = ["all"], version = "*"}
 
 [tool.poetry.dev-dependencies]
 networkx = "*"
