@@ -136,6 +136,33 @@ def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
     else:
         return coords, masks
 
+def remove_duplicate_pairs(pairs):
+    """
+    Remove redundant rows in a 2D array.
+    
+    Parameters
+    ----------
+    pairs : ndarray
+        The (n_pairs x 2) array of neighbors indices.
+
+    Returns
+    -------
+    uniq_pairs : ndarray
+        Array of unique pairs, the content of each row is sorted.
+    
+    Example
+    -------
+    >>> pairs = [[4, 3],
+                 [1, 2],
+                 [3, 4],
+                 [2, 1]]
+    >>> remove_duplicate_pairs(pairs)
+    array([[1, 2],
+           [3, 4]])
+    """
+    
+    uniq_pairs = np.unique(np.sort(pairs, axis=1), axis=0)
+    return uniq_pairs
 
 def distance_neighbors(coords, pairs):
     """
@@ -251,8 +278,7 @@ def pairs_from_knn(ind):
     source_nodes = np.repeat(ind[:,0], NN-1).reshape(-1,1)
     target_nodes = ind[:,1:].reshape(-1,1)
     pairs = np.hstack((source_nodes, target_nodes))
-    pairs = np.sort(pairs, axis=1)
-    pairs = np.unique(pairs, axis=0)
+    pairs = remove_duplicate_pairs(pairs)
     return pairs
 
 def build_knn(coords, k=6, **kwargs):
@@ -322,8 +348,7 @@ def build_rdn(coords, r, **kwargs):
     target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
     # remove duplicate pairs
     pairs = np.hstack((source_nodes, target_nodes))
-    pairs = np.sort(pairs, axis=1)
-    pairs = np.unique(pairs, axis=0)
+    pairs = remove_duplicate_pairs(pairs)
     return pairs
 
 def hyperdiagonal(coords):
@@ -414,8 +439,7 @@ def build_contacting(masks, r=1):
     target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
     # remove duplicate pairs
     pairs = np.hstack((source_nodes, target_nodes))
-    pairs = np.sort(pairs, axis=1)
-    pairs = np.unique(pairs, axis=0)
+    pairs = remove_duplicate_pairs(pairs)
     return pairs
 
 def mask_val_coord(masks):
@@ -471,6 +495,71 @@ def refactor_coords_pairs(coords, pairs):
     pairs = pairs.loc[:, ['source', 'target']].values
     return coords, pairs
 
+def link_solitaries(coords, pairs, method='knn', k=1, v=1):
+    """
+    Detect nodes that are not connected and link them to other nodes.
+    
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices.
+    method : string, optional
+        Method used to connect solitary nodes to their neighbors.
+        The default is 'knn', solitary nodes will be connected to their
+        'k' closest neighbors.
+    k : int, optional
+        Number of neighbors of the knn method. Default is 1.
+    v : int, optional
+        Verbosity, if different from 0 some messages are displayed.
+        Default is 1.
+
+    Returns
+    -------
+    pairs : ndarray
+        The (n_pairs x 2) matrix of neighbors indices, with additional edges (rows in array).
+    
+    Example
+    -------
+    >>> coords = np.array([[0, 0],
+                           [1, 0],
+                           [2, 0],
+                           [3.1, 0],
+                           [4, 0]])
+    >>> pairs = np.array([[0, 1],
+                          [1, 2]])
+    >>> link_solitaries(coords, pairs, method='knn', k=1)
+    array([[0, 1],
+           [1, 2],
+           [3, 4]])
+    >>> link_solitaries(coords, pairs, method='knn', k=2)
+    array([[0, 1],
+           [1, 2],
+           [2, 3],
+           [2, 4],
+           [3, 4]])
+    """
+    
+    # detect if some nodes have no edges
+    uniq_nodes = set(range(coords.shape[0]))
+    uniq_pairs = set(np.unique(pairs))
+    solitaries = uniq_nodes.difference(uniq_pairs)
+    if solitaries == set():
+        print("all nodes have at least one edge")
+    else:
+        if v!= 0:
+            print(f"there are {len(solitaries)}/{coords.shape[0]} nodes with no edges")
+        if method == 'knn':
+            nn_pairs = build_knn(coords, k=k)
+            # for each lonely node, add its edges with the knn neighbors
+            for i in solitaries:
+                select = np.logical_or(nn_pairs[:, 0] == i, nn_pairs[:, 1] == i)
+                pairs = np.vstack([pairs, nn_pairs[select, :]])
+        pairs = remove_duplicate_pairs(pairs)
+       
+    return pairs
+    
 def build_contacting_nn(masks, r=1, k=3):
     """
     Build a network from segmented regions as a mix between
@@ -504,20 +593,7 @@ def build_contacting_nn(masks, r=1, k=3):
     coords = mask_val_coord(masks)
     coords, pairs = refactor_coords_pairs(coords, pairs)
    
-    # ------ detect if some nodes have no edges ------
-    uniq_nodes = set(range(coords.shape[0]))
-    uniq_pairs = set(np.unique(pairs))
-    # nodes that have no edge
-    solitaries = uniq_nodes.difference(uniq_pairs)
-    if solitaries == set():
-        print("all nodes have at least one edge")
-    else:
-        print(f"there are {len(solitaries)}/{coords.shape[0]} nodes with no edges")
-        nn_pairs = build_NN(coords, k=k)
-        # for each lonely node, add its edges with the knn neighbors
-        for i in solitaries:
-            select = np.logical_or(nn_pairs[:, 0] == i, nn_pairs[:, 1] == i)
-            pairs = np.vstack(pairs, nn_pairs[select, :])
+    pairs = link_solitaries(coords, pairs)
        
     return coords, pairs
 
