@@ -563,7 +563,7 @@ def link_solitaries(coords, pairs, method='knn', k=1, v=1):
 def build_contacting_nn(masks, r=1, k=3):
     """
     Build a network from segmented regions as a mix between
-    the contacting area method, that can output some nodes
+    the contacting areas method, that can output some nodes
     edges, and the nearest neighbors method that will link
     these nodes to their neighbors.
 
@@ -573,7 +573,7 @@ def build_contacting_nn(masks, r=1, k=3):
         2D array of integers defining the identity of masks
         0 is background (no object detected)
     r : int
-        Radius of search for the contacting area method. The default is 1.
+        Radius of search for the contacting areas method. The default is 1.
     k : int, optional
         Number of nearest neighbors. The default is 3.
    

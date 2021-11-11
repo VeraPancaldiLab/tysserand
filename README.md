@@ -19,13 +19,35 @@ Simply do
 ```bash
 pip install tysserand
 ```
-
-To install a dedicated environment, if you already have conda you can use Mamba to do it pretty quickly:
+If you want the latest features not published on PyPI run
 ```bash
-conda install mamba -n base -c conda-forge
-mamba env create --file conda_env_spatial-networks.yml
+pip install git+https://github.com/VeraPancaldiLab/tysserand.git
 ```
-But ideally use pyenv + virtualenvs + poetry for better reproducibility and full open source stack (detailedexplanations coming soon).
+
+It is best practice to create a dedicated environment for each project.
+To do it with pyenv:
+```bash
+# create environment
+pyenv install 3.8.10
+pyenv virtualenv 3.8.10 spatial-networks
+# add environment to jupyterlab
+pyenv activate spatial-networks
+ipython kernel install --user --name=spatial-networks
+```
+or with Conda and Mamba:
+```bash
+# create environment
+conda install mamba -n base -c conda-forge
+mamba env create --file environment.yml
+# add environment to jupyterlab
+conda activate spatial-networks
+ipython kernel install --user --name=spatial-networks
+```
+If you want to reproduce results in the publication, install also PySAL
+```bash
+pip install libpysal geopandas fiona shapely pyproj rtree
+```
+
 
 ## Implemented methods
 

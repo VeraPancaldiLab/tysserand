@@ -1,0 +1,25 @@
+name: spatial-networks
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - ipykernel
+  - matplotlib
+  - pip
+  - qtconsole
+  - scipy
+  - seaborn
+  - pathlib
+  - python==3.7
+  - scikit-learn
+  - scikit-image
+  - numpy
+  - hdbscan
+  - umap-learn
+  - dask
+  - networkx
+  - igraph
+  - pysal
+  - geopandas
+  - opencv
+  - napari
