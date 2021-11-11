@@ -9,8 +9,8 @@ long_description = """# tysserand
 A library for fast and accurate spatial network reconstruction.  
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
-You can find the preprint and supplementary information on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v1).  
-A turorial is available in the [GitHub repository](https://github.com/VeraPancaldiLab/tysserand).
+You can find the article and supplementary information on [Bioinformatics](https://doi.org/10.1093/bioinformatics/btab490), and the freely available preprint (same text!) is on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v2).   
+A turorial is available in the [GitHub repository](https://github.com/VeraPancaldiLab/tysserand/tree/main/examples).
 
 ## Implemented methods
 
@@ -38,17 +38,17 @@ Areas are linked if they are in contact or closer than a given distance. Then, t
 
 setup(
     name="tysserand",
-    version="0.3.0",
+    version="0.4.0",
     author="Alexis Coullomb",
     author_email="alexis.coullomb.pro@gmail.com",
     description="Fast and accurate reconstruction of spatial networks from bioimages",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/VeraPancaldiLab/tysserand",
-    classifiers=['Programming Language :: Python :: 3.6',
+    classifiers=['Programming Language :: Python :: 3.8',
                  'License :: OSI Approved :: BSD License',
                  'Operating System :: OS Independent'],
     packages=find_packages(exclude=['build', 'docs', 'templates', 'data', 'tests']),
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     keywords = 'spatial networks bioimage sociology econometrics'
 )

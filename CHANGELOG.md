@@ -1,8 +1,11 @@
 # Changelog
 
+## v0.4.0
+v0.4.0 adds functions to help using Napari for interactive visualization and annotation, which comes with an additional tutorial. Plus some code refactoring and more detailed instructions in tutorials and README.
+
 ## v0.3.0
 
-v0.2.0 implements 2 new methods, corrects a bug and improves the project organization.
+v0.3.0 implements 2 new methods, corrects a bug and improves the project organization.
 
 **New features**
 
