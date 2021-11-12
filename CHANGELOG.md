@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.5.0
+In v0.5.0 3D network reconstruction is officially supported. The core functions were actually already compatible with n-dimensional networks. Here we added additional support in some data wrangling functions, and a tutorial to show what 3D nets look like in Napari.
+
 ## v0.4.0
 v0.4.0 adds functions to help using Napari for interactive visualization and annotation, which comes with an additional tutorial. Plus some code refactoring and more detailed instructions in tutorials and README.
 
