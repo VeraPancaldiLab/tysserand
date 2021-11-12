@@ -57,9 +57,9 @@ def make_random_nodes(size=100, ndim=2, expand=True):
         coords = coords * size**(1/ndim)
     return coords
 
-def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
-                      regular=True, double_pattern=False, 
-                      assym_y=True, return_image=False):
+def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
+                      regular=True, double_pattern_y=False, double_pattern_z=False, 
+                      assym_y=True, assym_z=True, return_image=False):
     """
     Build contacting areas similar to cell segmentation in tissues.
 
@@ -68,7 +68,10 @@ def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
     sx : int, optional
         Size of the image on the x axis. The default is 500.
     sy : int, optional
-        Size of the image on the x axis. The default is 500.
+        Size of the image on the y axis. The default is 500.
+    sz : int, optional
+        Size of the image on the z axis. The default is 0, which
+        implies generating a 2D image.
     nb : int, optional
         Related to the number of points, but not equal. The default is 50.
     noise_sigma : None or float, optional
@@ -99,38 +102,89 @@ def make_random_tiles(sx=500, sy=500, nb=50, noise_sigma=None,
 
     """
     
-    image = np.zeros((sy, sx))
-    # to overcome an issue with odd nb:
-    nb = int(np.ceil(nb / 2) * 2)
-    
-    if regular:
-        x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
-        x = np.hstack((x[::2], x[1::2]))
-        if assym_y:
-            nb = nb*2
-        y = np.linspace(start=0, stop=sy-1, num=nb, dtype=int)
-        if double_pattern:
-            y = np.hstack((y[::2], y[1::2]))
-        x_id = np.tile(x, y.size//2)
-        y_id = np.repeat(y, x.size//2)
-    else:
-        x_id = np.random.randint(sx, size=nb)
-        y_id = np.random.randint(sy, size=nb)
+    if sz == 0:
+        image = np.zeros((sy, sx))
+        # to overcome an issue with odd nb:
+        nb = int(np.ceil(nb / 2) * 2)
         
-    if noise_sigma is not None:
+        if regular:
+            x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
+            x = np.hstack((x[::2], x[1::2]))
+            if assym_y:
+                nb = nb*2
+            y = np.linspace(start=0, stop=sy-1, num=nb, dtype=int)
+            if double_pattern:
+                y = np.hstack((y[::2], y[1::2]))
+            x_id = np.tile(x, y.size//2)
+            z_id = np.repeat(y, x.size//2)
+        else:
+            x_id = np.random.randint(sx, size=nb)
+            z_id = np.random.randint(sy, size=nb)
+            
+        if noise_sigma is not None:
+            x_id = x_id + np.random.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
+            x_id[x_id<0] = 0
+            x_id[x_id>sx-1] = sx-1
+            x_id = np.round(x_id).astype(int)
+            y_id = y_id + np.random.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
+            y_id[y_id<0] = 0
+            y_id[y_id>sy-1] = sy-1
+            y_id = np.round(y_id).astype(int)
+            
+        coords = np.vstack((x_id, y_id)).T
+        image[y_id, x_id] = 1
+        masks = segmentation.watershed(-image)
+    else:
+        # make 3D simulation
+        image = np.zeros((sz, sy, sx))
+        # to overcome an issue with odd nb:
+        nb = int(np.ceil(nb / 2) * 2)
+        
+        if regular:
+            x = np.linspace(start=0, stop=sx-1, num=nb, dtype=int)
+            x = np.hstack((x[::2], x[1::2]))
+            if assym_y:
+                nb_y = nb*2
+            y = np.linspace(start=0, stop=sy-1, num=nb_y, dtype=int)
+            if assym_z:
+                nb_z = nb*2
+            z = np.linspace(start=0, stop=sz-1, num=nb_z, dtype=int)
+            if double_pattern_y:
+                y = np.hstack((y[::2], y[1::2]))
+            if double_pattern_z:
+                z = np.hstack((z[::2], z[1::2]))
+            x_id = np.tile(x, y.size//2)
+            y_id = np.repeat(y, x.size//2)
+            z_id = np.repeat(z, x.size//2)
+        else:
+            x_id = np.random.randint(sx, size=nb)
+            y_id = np.random.randint(sy, size=nb)
+            z_id = np.random.randint(sz, size=nb)
+            
+        if noise_sigma is None:
+            print("For 3D simulations noise_sigma needs to be > 0")
+            print("Setting noise_sigma to 1")
+            noise_sigma = 1
+        # x
         x_id = x_id + np.random.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
         x_id[x_id<0] = 0
         x_id[x_id>sx-1] = sx-1
         x_id = np.round(x_id).astype(int)
+        # y
         y_id = y_id + np.random.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
         y_id[y_id<0] = 0
         y_id[y_id>sy-1] = sy-1
         y_id = np.round(y_id).astype(int)
-        
-    coords = np.vstack((x_id, y_id)).T
-    image[y_id, x_id] = 1
-    masks = segmentation.watershed(-image)
-    
+        # z
+        z_id = z_id + np.random.normal(loc=0.0, scale=noise_sigma, size=z_id.size)
+        z_id[z_id<0] = 0
+        z_id[z_id>sz-1] = sz-1
+        z_id = np.round(z_id).astype(int)
+            
+        coords = np.vstack((x_id, y_id, z_id)).T
+        image[z_id, y_id, x_id] = 1
+        masks = segmentation.watershed(-image)
+
     if return_image:
         return coords, masks, image
     else:
@@ -460,7 +514,13 @@ def mask_val_coord(masks):
     
     coords = measure.regionprops_table(masks, properties=('label', 'centroid'))
     coords = pd.DataFrame.from_dict(coords)
-    coords.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
+    if coords.shape[1] == 3:
+        coords.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
+    elif coords.shape[1] == 4:
+        coords.rename(columns={'centroid-2':'x', 'centroid-1':'y', 'centroid-0':'z'}, 
+                      inplace=True)
+    else:
+        print('More than 3 detected spatial dimensions, check output column names.')
     coords.index = coords['label']
     coords.drop(columns='label', inplace=True)
     return coords
@@ -1202,7 +1262,7 @@ def coords_to_df(coords, columns=None):
         if nb_dim == 2:
             columns = ['x', 'y']
         elif nb_dim == 3:
-            columns = ['x', 'y', 'y']
+            columns = ['x', 'y', 'z']
         else:
             columns = ['x'+str(i) for i in range(nb_dim)]
     
