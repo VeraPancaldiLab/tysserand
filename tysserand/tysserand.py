@@ -1014,7 +1014,7 @@ def rescale(data, perc_mini=1, perc_maxi=99,
         return data_out
 
 def plot_network(coords, pairs, disp_id=False, labels=None,
-                 color_mapper=None, legend=True,
+                 color_mapper=None, legend=True, legend_opt=None,
                  col_nodes=None, cmap_nodes=None, marker=None,
                  size_nodes=None, col_edges='k', alpha_edges=0.5, 
                  linewidth=None,
@@ -1032,6 +1032,9 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         If True nodes' indices are displayed.
     labels: panda series
         The nodes' labels from which they are colored.
+    legend_opt : dict or None
+        Optional parameters for the legend
+        like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
     color_mapper: dict
         Maps each label to its color. Computed if not provided.
     figsize : (float, float), default: :rc:`figure.figsize`
@@ -1088,7 +1091,10 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
             ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
         if legend:
-            plt.legend()
+            if legend_opt is None:
+                plt.legend()
+            else:
+                plt.legend(**legend_opt)
     else:
         ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
@@ -1106,7 +1112,7 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         return fig, ax
 
 def plot_network_distances(coords, pairs, distances, labels=None,
-                           color_mapper=None, legend=True,
+                           color_mapper=None, legend=True, legend_opt=None,
                            col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None, 
                            cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
                            figsize=(15, 15), ax=None, aspect='equal', **kwargs):
@@ -1123,6 +1129,9 @@ def plot_network_distances(coords, pairs, distances, labels=None,
         Distances between each pair of neighbors.
     labels: panda series
         The nodes' labels from which they are colored.
+    legend_opt : dict or None
+        Optional parameters for the legend
+        like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
     color_mapper: dict
         Maps each label to its color. Computed if not provided.
     col_nodes : str of matplotlib compatible color, optional
@@ -1180,7 +1189,10 @@ def plot_network_distances(coords, pairs, distances, labels=None,
             ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
         if legend:
-            plt.legend()
+            if legend_opt is None:
+                plt.legend()
+            else:
+                plt.legend(**legend_opt)
     else:
         ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
