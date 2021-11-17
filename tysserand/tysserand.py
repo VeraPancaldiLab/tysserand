@@ -113,13 +113,13 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
             if assym_y:
                 nb = nb*2
             y = np.linspace(start=0, stop=sy-1, num=nb, dtype=int)
-            if double_pattern:
+            if double_pattern_y:
                 y = np.hstack((y[::2], y[1::2]))
             x_id = np.tile(x, y.size//2)
-            z_id = np.repeat(y, x.size//2)
+            y_id = np.repeat(y, x.size//2)
         else:
             x_id = np.random.randint(sx, size=nb)
-            z_id = np.random.randint(sy, size=nb)
+            y_id = np.random.randint(sy, size=nb)
             
         if noise_sigma is not None:
             x_id = x_id + np.random.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
