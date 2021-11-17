@@ -1078,8 +1078,10 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
-                att_colors = sns.color_palette('muted').as_hex() 
-            color_mapper = dict(zip(uniq, att_colors))
+                cmap_nodes = sns.color_palette('muted').as_hex() 
+            # make a dictionnary attribute:color, with cycling over cmap
+            n_colors = len(cmap_nodes)
+            color_mapper = {x: cmap_nodes[i % n_colors] for i, x in enumerate(uniq)}
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
@@ -1168,8 +1170,10 @@ def plot_network_distances(coords, pairs, distances, labels=None,
         # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
-                att_colors = sns.color_palette('muted').as_hex() 
-            color_mapper = dict(zip(uniq, att_colors))
+                cmap_nodes = sns.color_palette('muted').as_hex() 
+            # make a dictionnary attribute:color, with cycling over cmap
+            n_colors = len(cmap_nodes)
+            color_mapper = {x: cmap_nodes[i % n_colors] for i, x in enumerate(uniq)}
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
