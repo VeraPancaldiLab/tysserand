@@ -3,3 +3,10 @@
 *dask-worker-space*
 *WSI_LungPredict*
 *cache*
+new_data/1472.csv
+new_data/minNVA_21-003.IMMCORE.C1v1_17T003826-06-ImvessC1-4518.czi_79795_ObjData.fcs.csv
+new_data/NVA_21-003.IMMCORE.C1v1_17T003826-06-ImvessC1-4518.czi_79795_ObjData.fcs.csv
+Imagin_lungPredict/*
+new_data/*
+Imagin_lungPredict/
+new_data/
