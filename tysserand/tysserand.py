@@ -443,10 +443,8 @@ def find_neighbors(masks, i, r=1):
         
     Returns
     -------
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row, 
-        values correspond to values in masks, which are different from index
-        values of nodes
+    neighbors : array
+        Neighbors in the vicinity of mask `i` in masks.
     """
     
     mask = np.uint8(masks == i)
@@ -1722,3 +1720,30 @@ def update_edges(
         pass
     add_edges(viewer, annotations, edge_color=edge_color, name=name)
 
+def update_annotations(
+    viewer,
+    annotations,
+    layer_nodes_name='nodes',
+    layer_edges_name='edges',
+    edge_color='white',
+    ):
+    """
+    Update nodes and edges annotations in a napari viewer.
+    """
+    
+    try:
+        del viewer.layers[layer_nodes_name]
+    except ValueError:
+        # nodes layer was already deleted
+        pass
+    try:
+        del viewer.layers[layer_edges_name]
+    except ValueError:
+        # edges layer was already deleted
+        pass
+
+    if 'nodes_coords' in annotations.keys():
+        add_nodes(viewer, annotations, name=layer_nodes_name)
+    if 'edges_coords' in annotations.keys():
+        add_edges(viewer, annotations, edge_color=edge_color, name=layer_edges_name)
+    return
