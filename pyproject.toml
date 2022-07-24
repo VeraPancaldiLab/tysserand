@@ -3,7 +3,7 @@ name = "tysserand"
 version = "0.5.1"
 description = "Fast and accurate spatial networks reconstruction."
 authors = ["Alexis Coullomb <alexis.coullomb.pro@gmail.com>"]
-license = "BSD 3-Clause License"
+license = "GNU GPLv3"
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -26,8 +26,10 @@ napari = {extras = ["all"], version = "*"}
 [tool.poetry.dev-dependencies]
 networkx = "*"
 igraph = "*"
+cairocffi = "*"
 pysal = "*"
 geopandas = "*"
+scanpy = "*"
 
 [build-system]
 requires = ["poetry-core"]

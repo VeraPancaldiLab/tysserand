@@ -38,7 +38,7 @@ Areas are linked if they are in contact or closer than a given distance. Then, t
 
 setup(
     name="tysserand",
-    version="0.5.1",
+    version="0.5.2",
     author="Alexis Coullomb",
     author_email="alexis.coullomb.pro@gmail.com",
     description="Fast and accurate reconstruction of spatial networks from bioimages",
@@ -46,7 +46,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/VeraPancaldiLab/tysserand",
     classifiers=['Programming Language :: Python :: 3.8',
-                 'License :: OSI Approved :: BSD License',
+                 'License :: OSI Approved :: GNU GPLv3',
                  'Operating System :: OS Independent'],
     packages=find_packages(exclude=['build', 'docs', 'templates', 'data', 'tests']),
     python_requires='>=3.8',
