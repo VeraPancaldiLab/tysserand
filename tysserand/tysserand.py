@@ -1493,6 +1493,40 @@ def add_to_AnnData(coords, pairs, adata):
                                          'edge_trimming': 'percentile 99'}}
 
 
+def get_from_AnnData(adata, key_edges='spatial_connectivities', is_symmetric=True):
+    """
+    Extract nodes and edges data from an AnnData object.
+
+    Parameter
+    ---------
+    adata : AnnData object
+        An object dedicated to single-cell data analysis.
+    key_edges : str
+        Key where edges are stored.
+    is_symmetric : bool
+        Whether the network matrix is symmetric.
+    
+    Returns
+    -------
+    nodes : dataframe
+        Coordinates of nodes indicated by 'x', 'y' or other if required.
+    edges : ndarray
+        The pairs of nodes given by their indices.
+    """
+
+    nodes = adata.obs
+
+    if is_symmetric:
+        from scipy.sparse import triu
+        src, trg = triu(adata.obsp[key_edges]).nonzero()
+    else:
+        src, trg = adata.obsp[key_edges].nonzero()
+    pairs = np.vstack([src, trg]).T
+    edges = pd.DataFrame(data=pairs, columns=['source', 'target'])
+
+    return nodes, edges
+
+
 # --------------------------------------------------------------------
 # ------------- Interactive visualization and annotation -------------
 # --------------------------------------------------------------------
