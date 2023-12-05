@@ -1201,8 +1201,8 @@ def plot_network_distances(coords, pairs, distances, labels=None,
     for pair, dist in zip(pairs[:,:], scaled_dist):
         [x0, y0], [x1, y1] = coords[pair]
         ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges, linewidth=linewidth)
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-             orientation='vertical', label='Distance')
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
+                 orientation='vertical', label='Distance')
     # TODO: plot many lines more efficiently check
     # from https://stackoverflow.com/a/50029441
     # https://matplotlib.org/gallery/shapes_and_collections/line_collection.html#sphx-glr-gallery-shapes-and-collections-line-collection-py
