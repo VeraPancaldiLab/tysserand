@@ -102,7 +102,7 @@ tornado==6.1
 tqdm==4.62.3
 traitlets==5.1.1
 typing-extensions==3.10.0.2
-urllib3==1.26.7
+urllib3==1.26.18
 vispy==0.9.3
 wcwidth==0.2.5
 wrapt==1.13.3
