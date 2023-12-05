@@ -363,7 +363,7 @@ def build_knn(coords, k=6, **kwargs):
     pairs = pairs_from_knn(ind)
     return pairs
 
-def build_rdn(coords, r, **kwargs):
+def build_rdn(coords, r, coords_ref=None, **kwargs):
     """
     Reconstruct edges between nodes by radial distance neighbors (rdn) method.
     An edge is drawn between each node and the nodes closer 
@@ -375,6 +375,9 @@ def build_rdn(coords, r, **kwargs):
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     r : float, optional
         Radius in which nodes are connected.
+    coords_ref : ndarray, optional
+        Source points in the network, `pairs` will indicate edges from `coords_ref`
+        to `coords`, if None, `coords` is used, the network is undirected.
     
     Examples
     --------
@@ -388,7 +391,10 @@ def build_rdn(coords, r, **kwargs):
     """
     
     tree = BallTree(coords, **kwargs)
-    ind = tree.query_radius(coords, r=r)
+    if coords_ref is None:
+        ind = tree.query_radius(coords, r=r)
+    else:
+        ind = tree.query_radius(coords_ref, r=r)
     # clean arrays of neighbors from self referencing neighbors
     # and aggregate at the same time
     source_nodes = []
@@ -402,7 +408,8 @@ def build_rdn(coords, r, **kwargs):
     target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
     # remove duplicate pairs
     pairs = np.hstack((source_nodes, target_nodes))
-    pairs = remove_duplicate_pairs(pairs)
+    if coords_ref is None:
+        pairs = remove_duplicate_pairs(pairs)
     return pairs
 
 def hyperdiagonal(coords):
