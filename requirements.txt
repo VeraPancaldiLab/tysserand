@@ -5,7 +5,7 @@ Babel==2.9.1
 backcall==0.2.0
 bokeh==2.4.1
 cachey==0.2.1
-certifi==2021.10.8
+certifi==2023.7.22
 charset-normalizer==2.0.7
 click==8.0.3
 cloudpickle==2.0.0
