@@ -3,3 +3,5 @@
 *dask-worker-space*
 *WSI_LungPredict*
 *cache*
+data
+.DS_Store

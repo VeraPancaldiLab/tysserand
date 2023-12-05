@@ -7,7 +7,7 @@ license = "GNU GPLv3"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "3.8*"
+python = ">= 3.8"
 ipykernel = "*"
 matplotlib = "*"
 qtconsole = "*"
@@ -19,7 +19,7 @@ scikit-image = "*"
 numpy = "*"
 hdbscan = "*"
 umap-learn = "*"
-dask = {extras = ["complete"], version = "^2021.7.1"}
+dask = {extras = ["complete"], version = "*"}
 opencv-python-headless = "*"
 napari = {extras = ["all"], version = "*"}
 
