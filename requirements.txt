@@ -63,7 +63,7 @@ psutil==5.8.0
 psygnal==0.2.0
 ptyprocess==0.7.0
 pydantic==1.8.2
-Pygments==2.10.0
+Pygments==2.15.0
 PyOpenGL==3.1.5
 pyparsing==2.4.7
 PyQt5==5.15.6
