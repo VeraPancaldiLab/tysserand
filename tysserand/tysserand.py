@@ -597,7 +597,14 @@ def refactor_coords_pairs(coords, pairs):
     pairs = pairs.loc[:, ['source', 'target']].values
     return coords, pairs
 
-def link_solitaries(coords, pairs, method='knn', k=1, v=1):
+def link_solitaries(
+    coords, 
+    pairs, 
+    method='delaunay', 
+    min_neighbors=3, 
+    all_pairs=None,
+    all_dist=None,
+    verbose=1):
     """
     Detect nodes that are not connected and link them to other nodes.
     
@@ -608,12 +615,15 @@ def link_solitaries(coords, pairs, method='knn', k=1, v=1):
     pairs : ndarray
         The (n_pairs x 2) matrix of neighbors indices.
     method : string, optional
-        Method used to connect solitary nodes to their neighbors.
-        The default is 'knn', solitary nodes will be connected to their
-        'k' closest neighbors.
-    k : int, optional
-        Number of neighbors of the knn method. Default is 1.
-    v : int, optional
+        Method used to connect solitary nodes to their neighbors. Default is 'delaunay'.
+        With 'knn', solitary nodes will be connected to their 'k' nearest neighbors.
+    min_neighbors : int
+        Minimum number of neighbors before linking nodes to additional nodes.
+    all_pairs : ndarray
+        Pre-computed matrix of potential edges to re-link nodes.
+    all_dist : array
+        Pre-computed distances between all potential pairs of nodes.
+    verbose : int, optional
         Verbosity, if different from 0 some messages are displayed.
         Default is 1.
 
@@ -644,20 +654,48 @@ def link_solitaries(coords, pairs, method='knn', k=1, v=1):
     """
     
     # detect if some nodes have no edges
-    uniq_nodes = set(range(coords.shape[0]))
+    n_nodes = coords.shape[0]
+    uniq_nodes = set(range(n_nodes))
     uniq_pairs = set(np.unique(pairs))
     solitaries = uniq_nodes.difference(uniq_pairs)
-    if solitaries == set():
+    if min_neighbors > 1:
+        # detect nodes with too few edges
+        nodes_ids, nodes_counts = np.unique(pairs, return_counts=True)
+        nodes_ids = nodes_ids[nodes_counts < min_neighbors]
+        solitaries = solitaries.union(nodes_ids)
+    n_solitaries = len(solitaries)
+    if min_neighbors == 1 and n_solitaries == 0:
         print("all nodes have at least one edge")
+    elif min_neighbors > 1 and n_solitaries == 0:
+        print(f"all nodes have at least {min_neighbors} edges")
     else:
-        if v!= 0:
-            print(f"there are {len(solitaries)}/{coords.shape[0]} nodes with no edges")
-        if method == 'knn':
-            nn_pairs = build_knn(coords, k=k)
+        if verbose != 0:
+            if min_neighbors == 1:
+                print(f"there are {n_solitaries}/{n_nodes} nodes with no edges")
+            else:
+                print(f"there are {n_solitaries}/{n_nodes} nodes with < {min_neighbors} edges")
+
+        if method == 'delaunay':
+            if all_pairs is None:
+                all_pairs = build_delaunay(coords, node_adaptive_trimming=False, trim_dist=False)
+            if all_dist is None:
+                all_dist = distance_neighbors(coords, all_pairs)
+            for node_id in solitaries:
+                select_src = np.where(all_pairs[:, 0] == node_id)[0]
+                select_trg = np.where(all_pairs[:, 1] == node_id)[0]
+                pairs_ids = np.hstack([select_src, select_trg]) # array of indices, not a boolean vector
+                node_distances = all_dist[pairs_ids]
+                if len(node_distances) >= min_neighbors:
+                    select_pairs_ids = np.argsort(node_distances)[:min_neighbors]
+                    new_pairs_ids = pairs_ids[select_pairs_ids]
+                    pairs = np.vstack([pairs, all_pairs[new_pairs_ids, :]])
+        elif method == 'knn':
+            nn_pairs = build_knn(coords, k=min_neighbors)
             # for each lonely node, add its edges with the knn neighbors
             for i in solitaries:
                 select = np.logical_or(nn_pairs[:, 0] == i, nn_pairs[:, 1] == i)
                 pairs = np.vstack([pairs, nn_pairs[select, :]])
+
         pairs = remove_duplicate_pairs(pairs)
        
     return pairs
