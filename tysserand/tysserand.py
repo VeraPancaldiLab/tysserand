@@ -275,7 +275,15 @@ def find_trim_dist(dist, method='percentile_size', nb_nodes=None, perc=99):
         
     return dist_thresh
 
-def build_delaunay(coords, trim_dist='percentile_size', perc=99, return_dist=False):
+def build_delaunay(
+    coords, 
+    node_adaptive_trimming=True, 
+    n_edges=3, 
+    trim_dist_ratio=2,
+    min_dist=0, 
+    trim_dist=False, 
+    perc=99, 
+    return_dist=False):
     """
     Reconstruct edges between nodes by Delaunay triangulation.
 
@@ -283,8 +291,20 @@ def build_delaunay(coords, trim_dist='percentile_size', perc=99, return_dist=Fal
     ----------
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
+    node_adaptive_trimming : bool
+        Method to trim edges with a distance threshold adapted for each node.
+        For each node, the distance threshold is defined as the Nth smallest
+        edge length x `trim_dist_ratio`. Edges with length above this threshold
+        and a minimum distance `min_dist` are discarded.
+    n_edges : int
+        The Nth smallest edge used to compute the trimming distance.
+    trim_dist_ratio : float
+        Ratio between the distance threshold and the Nth smallest distance.
+    min_dist : float
+        Minimum distance threshold used witht the node adaptive trimming method.
     trim_dist : str or float, optional
-        Method or distance used to delete reconstructed edges. The default is 'percentile_size'.
+        Method or distance used to delete reconstructed edges. 
+        Use 'percentile_size' to adapt this distance to the number of nodes.
     perc : int or float, optional
         The percentile of distances used as the threshold. The default is 99.
     return_dist : bool, optional
@@ -305,7 +325,24 @@ def build_delaunay(coords, trim_dist='percentile_size', perc=99, return_dist=Fal
     # pairs of indices of neighbors
     pairs = Voronoi(coords).ridge_points
 
-    if trim_dist is not False:
+    if node_adaptive_trimming:
+        dist = distance_neighbors(coords, pairs)
+        for node_id in range(len(coords)):
+            select_src = np.where(pairs[:, 0] == node_id)[0]
+            select_trg = np.where(pairs[:, 1] == node_id)[0]
+            pairs_ids = np.hstack([select_src, select_trg]) # array of indices, not a boolean vector
+            node_distances = dist[pairs_ids]
+            if len(node_distances) > n_edges:
+                # use the Nth smallest edge to compute the distance threshold
+                thresh_dist = np.sort(node_distances)[n_edges-1] * trim_dist_ratio
+                # filter distances above threshold and above minimum edge length
+                discard = np.logical_and(node_distances > thresh_dist, node_distances > min_dist)
+                discard_ids = pairs_ids[discard]
+                pairs = np.delete(pairs, discard_ids, axis=0)
+                dist = np.delete(dist, discard_ids)
+
+    if trim_dist is not False:  # can be str or float
+        # remove edges with length above threshold distance
         dist = distance_neighbors(coords, pairs)
         if not isinstance(trim_dist, (int, float)):
             trim_dist = find_trim_dist(dist=dist, method=trim_dist, nb_nodes=coords.shape[0], perc=perc)
