@@ -449,6 +449,65 @@ def build_rdn(coords, r, coords_ref=None, **kwargs):
         pairs = remove_duplicate_pairs(pairs)
     return pairs
 
+def build_lattice(coords, r=None, coords_ref=None, lattice='hexagonal', r_factor=None, **kwargs):
+    """
+    Reconstruct edges between nodes organized on a lattice.
+    The lattice can be a hexagonal, square, or cubic (3D).
+    An edge is drawn between each node and the nodes closer 
+    than a threshold distance (within a radius).
+
+    Parameters
+    ----------
+    coords : ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    r : float, optional
+        Radius in which nodes are connected. If not provided, it is guessed from data.
+    coords_ref : ndarray, optional
+        Source points in the network, `pairs` will indicate edges from `coords_ref`
+        to `coords`, if None, `coords` is used, the network is undirected.
+    r_factor : float
+        Factor to include nodes in 'diagonals' if `r` is not provided.
+    lattice : str
+        Type of spatial organization of nodes. It can be 'hexagonal', 'square' or 'cubic'.
+        Used to set `r_factor` if not provided.
+    """
+    
+    tree = BallTree(coords, **kwargs)
+    if r is None:
+        # guess minimum distance between nodes
+        _, ind = tree.query(coords, k=2) # the first k is "oneself"
+        pairs = pairs_from_knn(ind)
+        min_dist = np.min(distance_neighbors(coords, pairs))
+        if r_factor is None:
+            if lattice == 'hexagonal':
+                r_factor = 1.01
+            elif lattice == 'square':
+                r_factor = np.sqrt(2) * 1.01
+            elif lattice == 'cube':
+                r_factor = np.sqrt(3) * 1.01
+        r = min_dist * r_factor
+    
+    if coords_ref is None:
+        ind = tree.query_radius(coords, r=r)
+    else:
+        ind = tree.query_radius(coords_ref, r=r)
+    # clean arrays of neighbors from self referencing neighbors
+    # and aggregate at the same time
+    source_nodes = []
+    target_nodes = []
+    for i, arr in enumerate(ind):
+        neigh = arr[arr != i]
+        source_nodes.append([i]*(neigh.size))
+        target_nodes.append(neigh)
+    # flatten arrays of arrays
+    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
+    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
+    # remove duplicate pairs
+    pairs = np.hstack((source_nodes, target_nodes))
+    if coords_ref is None:
+        pairs = remove_duplicate_pairs(pairs)
+    return pairs
+
 def hyperdiagonal(coords):
     """
     Compute the maximum possible distance from a set of coordinates as the
