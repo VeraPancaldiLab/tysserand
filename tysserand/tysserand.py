@@ -480,7 +480,7 @@ def build_lattice(coords, r=None, coords_ref=None, lattice='hexagonal', r_factor
         min_dist = np.min(distance_neighbors(coords, pairs))
         if r_factor is None:
             if lattice == 'hexagonal':
-                r_factor = 1.01
+                r_factor = 1.5
             elif lattice == 'square':
                 r_factor = np.sqrt(2) * 1.01
             elif lattice == 'cube':
