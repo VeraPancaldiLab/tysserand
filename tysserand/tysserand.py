@@ -554,7 +554,7 @@ def find_neighbors(masks, i, r=1):
     # create the border in which we'll look at other masks
     kernel = morphology.disk(r)
     dilated = cv.dilate(mask, kernel, iterations=1)
-    dilated = dilated.astype(np.bool)
+    dilated = dilated.astype(bool)
     # detect potential touching masks
     neighbors = np.unique(masks[dilated])
     # discard the initial cell id of interest
