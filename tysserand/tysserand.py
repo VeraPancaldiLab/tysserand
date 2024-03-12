@@ -97,7 +97,7 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
     --------
     >>> coords, masks, image = make_random_tiles(double_pattern=True, return_image=True)
     >>> showim(image)
-    >>> label_cmap = mpl.cm.get_cmap('Set2')(range(8))
+    >>> label_cmap = mpl.colormaps.get_cmap('Set2')(range(8))
     >>> showim(color.label2rgb(masks, bg_label=0, colors=label_cmap), origin='lower')
 
     """
