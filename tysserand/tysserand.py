@@ -1602,10 +1602,17 @@ def to_iGraph(nodes, edges, attributes=None):
             G.vs[col] = att
     return G
 
-def add_to_AnnData(coords, pairs, adata):
+def add_to_AnnData(
+    coords, 
+    pairs, 
+    adata=None,
+    counts=None,
+    obs_names=None,
+    var_names=None,
+    ):
     """    
     Convert tysserand network representation to sparse matrices
-    and add them to an AnnData (Scanpy) object.
+    and add them to an AnnData (Scanpy) object, created if not provided.
 
     Parameters
     ----------
@@ -1616,6 +1623,16 @@ def add_to_AnnData(coords, pairs, adata):
     adata : AnnData object
         An object dedicated to single-cell data analysis.
     """
+
+    return_adata = False
+    if adata is None:
+        import anndata as ad
+        adata = ad.AnnData(csr_matrix(counts))
+        return_adata = True
+        if obs_names is not None:
+            adata.obs_names = obs_names
+        if var_names is not None:
+            adata.var_names = var_names
     
     # convert arrays to sparse matrices
     n_cells = adata.shape[0]
@@ -1625,6 +1642,7 @@ def add_to_AnnData(coords, pairs, adata):
     sparse_dist = csr_matrix((distances, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.float)
     
     # add to AnnData object
+    adata.obsm['spatial'] = coords
     adata.obsp['connectivities'] = sparse_connect
     adata.obsp['distances'] = sparse_dist
     adata.uns['neighbors'] = {'connectivities_key': 'connectivities', 
@@ -1632,6 +1650,8 @@ def add_to_AnnData(coords, pairs, adata):
                               'params': {'method': 'delaunay', 
                                          'metric': 'euclidean', 
                                          'edge_trimming': 'percentile 99'}}
+    if return_adata:
+        return adata
 
 
 def get_from_AnnData(adata, key_edges='spatial_connectivities', is_symmetric=True):
@@ -1655,14 +1675,18 @@ def get_from_AnnData(adata, key_edges='spatial_connectivities', is_symmetric=Tru
         The pairs of nodes given by their indices.
     """
 
-    nodes = adata.obs
+    nodes = pd.DataFrame(
+        data=adata.X.toarray(),
+        columns=adata.var_names,
+        index=adata.obs_names,
+    )
+    # merge with adata.obs?
 
     if is_symmetric:
         from scipy.sparse import triu
-        src, trg = triu(adata.obsp[key_edges]).nonzero()
+        pairs = np.argwhere(triu(adata.obsp[key_edges] != 0))
     else:
-        src, trg = adata.obsp[key_edges].nonzero()
-    pairs = np.vstack([src, trg]).T
+        pairs = np.argwhere(adata.obsp[key_edges] != 0)
     edges = pd.DataFrame(data=pairs, columns=['source', 'target'])
 
     return nodes, edges
