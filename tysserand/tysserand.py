@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
+import anndata as ad
 import os
 import joblib
 import itertools
@@ -1609,6 +1610,8 @@ def add_to_AnnData(
     counts=None,
     obs_names=None,
     var_names=None,
+    return_adata=False,
+    network_metadata=None,
     ):
     """    
     Convert tysserand network representation to sparse matrices
@@ -1621,12 +1624,16 @@ def add_to_AnnData(
     edges : ndarray
         The pairs of nodes given by their indices.
     adata : AnnData object
-        An object dedicated to single-cell data analysis.
+        An object dedicated to single-cell data analysis. 
+        If not provided, it is created and returned.
     """
 
-    return_adata = False
     if adata is None:
+        return_adata = True
         import anndata as ad
+        if counts is None:
+            # make dummy counts table
+            counts = np.empty(shape=(len(coords), 1))
         adata = ad.AnnData(csr_matrix(counts))
         return_adata = True
         if obs_names is not None:
@@ -1645,11 +1652,13 @@ def add_to_AnnData(
     adata.obsm['spatial'] = coords
     adata.obsp['connectivities'] = sparse_connect
     adata.obsp['distances'] = sparse_dist
-    adata.uns['neighbors'] = {'connectivities_key': 'connectivities', 
-                              'distances_key': 'distances', 
-                              'params': {'method': 'delaunay', 
-                                         'metric': 'euclidean', 
-                                         'edge_trimming': 'percentile 99'}}
+    if network_metadata is None:
+        network_metadata = {'connectivities_key': 'connectivities', 
+                            'distances_key': 'distances', 
+                            'params': {'method': 'delaunay', 
+                                        'metric': 'euclidean', 
+                                        'edge_trimming': 'percentile 99'}}
+    adata.uns['neighbors'] = network_metadata
     if return_adata:
         return adata
 
