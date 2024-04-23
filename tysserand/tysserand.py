@@ -9,6 +9,7 @@ import joblib
 import itertools
 from scipy.spatial import Voronoi
 from sklearn.neighbors import BallTree
+import pynndescent
 from skimage import morphology, feature, measure, segmentation, filters, color
 from scipy import ndimage as ndi
 from scipy.sparse import csr_matrix
@@ -373,7 +374,7 @@ def pairs_from_knn(ind):
     pairs = remove_duplicate_pairs(pairs)
     return pairs
 
-def build_knn(coords, k=6, **kwargs):
+def build_knn(coords, k=6, approximate=True, metric='euclidean', n_jobs=-1, **kwargs):
     """
     Reconstruct edges between nodes by k-nearest neighbors (knn) method.
     An edge is drawn between each node and its k nearest neighbors.
@@ -384,6 +385,15 @@ def build_knn(coords, k=6, **kwargs):
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     k : int, optional
         Number of nearest neighbors. The default is 6.
+    approximate : bool, True
+        Whether fast appriximation is authorized for networks >= 3000 nodes.
+    metric: string or callable (optional, default='euclidean')
+        The metric to use for computing nearest neighbors.
+        See pynndescent documentation.
+    n_jobs: int or None, optional (default=-1)
+        The number of parallel jobs to run for neighbors index construction.
+        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
+        ``-1`` means using all processors.
     
     Examples
     --------
@@ -396,9 +406,28 @@ def build_knn(coords, k=6, **kwargs):
         The (n_pairs x 2) matrix of neighbors indices.
     """
     
-    tree = BallTree(coords, **kwargs)
-    _, ind = tree.query(coords, k=k+1) # the first k is "oneself"
-    pairs = pairs_from_knn(ind)
+    if len(coords) < 3000 or not approximate:
+        tree = BallTree(coords, **kwargs)
+        _, neighbors = tree.query(coords, k=k+1) # the first k is "oneself"
+    else:
+        n_index = min(k, len(coords))
+        # JIT warmup with small fake network
+        warmup_coords = np.random.random(size=(n_index+2, coords.shape[1]))
+        warmup_index = pynndescent.NNDescent(
+            coords, 
+            metric=metric, 
+            n_neighbors=n_index+1, 
+            n_jobs=n_jobs,
+            )
+        # actual knn network building
+        index = pynndescent.NNDescent(
+            coords, 
+            metric=metric, 
+            n_neighbors=n_index+1, 
+            n_jobs=n_jobs,
+            )
+        neighbors = index.neighbor_graph[0]
+    pairs = pairs_from_knn(neighbors)
     return pairs
 
 def build_rdn(coords, r, coords_ref=None, **kwargs):
