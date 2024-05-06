@@ -1261,9 +1261,9 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
         if legend:
             if legend_opt is None:
-                plt.legend()
+                ax.legend()
             else:
-                plt.legend(**legend_opt)
+                ax.legend(**legend_opt)
     else:
         ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
@@ -1359,9 +1359,9 @@ def plot_network_distances(coords, pairs, distances, labels=None,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
         if legend:
             if legend_opt is None:
-                plt.legend()
+                ax.legend()
             else:
-                plt.legend(**legend_opt)
+                ax.legend(**legend_opt)
     else:
         ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
