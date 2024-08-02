@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.6.0
+
+### Added
+  - `get_from_AnnData` function
+  - option to link nodes of 2 different sets in `build_rdn`
+  - `node_adaptive_trimming` reconstruction method
+  - `delaunay` method to `link_solitaries` function
+  - `build_lattice` reconstruction method
+  - use pynndescent for larger network reconstruction with knn
+
+### Changed
+  - upgrade compatibility with AnnData
+
+### Fixed
+  - fix legend in plot_network functions
+
 ## v0.5.0
 In v0.5.0 3D network reconstruction is officially supported. The core functions were actually already compatible with n-dimensional networks. Here we added additional support in some data wrangling functions, and a tutorial to show what 3D nets look like in Napari.
 

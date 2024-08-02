@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tysserand"
-version = "0.5.1"
+version = "0.6.0"
 description = "Fast and accurate spatial networks reconstruction."
 authors = ["Alexis Coullomb <alexis.coullomb.pro@gmail.com>"]
 license = "GNU GPLv3"
@@ -29,6 +29,7 @@ igraph = "*"
 cairocffi = "*"
 pysal = "*"
 geopandas = "*"
+anndata = "*"
 scanpy = "*"
 
 [build-system]

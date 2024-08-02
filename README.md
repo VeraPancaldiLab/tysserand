@@ -28,8 +28,8 @@ It is best practice to create a dedicated environment for each project.
 To do it with pyenv:
 ```bash
 # create environment
-pyenv install 3.8.10
-pyenv virtualenv 3.8.10 spatial-networks
+pyenv install 3.10.13
+pyenv virtualenv 3.10.13 spatial-networks
 # add environment to jupyterlab
 pyenv activate spatial-networks
 ipython kernel install --user --name=spatial-networks
@@ -55,7 +55,7 @@ pip install libpysal geopandas fiona shapely pyproj rtree
 
 ### Delaunay triangulation
 
-This method builds virtual cells centered arround each node and contacting each other to fully tile the space occupyied by the nodes. Edges are drawn between the nodes of contacting tiles.
+This method builds virtual cells centered arround each node and contacting each other to fully tile the space occupyied by the nodes. Edges are drawn between the nodes of contacting tiles. The `node_adaptive_trimming` option can infer a better distance threshold to discard edges for each individual node.
 
 ![Edge lengths with *Delaunay* reconstruction](./images/publication_figures/mIF-Delaunay_distances.png)  
 ![Trimmed network](./images/publication_figures/mIF-Delaunay_network.png)  

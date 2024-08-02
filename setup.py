@@ -38,7 +38,7 @@ Areas are linked if they are in contact or closer than a given distance. Then, t
 
 setup(
     name="tysserand",
-    version="0.5.2",
+    version="0.6.0",
     author="Alexis Coullomb",
     author_email="alexis.coullomb.pro@gmail.com",
     description="Fast and accurate reconstruction of spatial networks from bioimages",
