@@ -3,7 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
-import anndata as ad
 import os
 import joblib
 import itertools
@@ -1656,7 +1655,7 @@ def add_to_AnnData(
         An object dedicated to single-cell data analysis. 
         If not provided, it is created and returned.
     """
-
+    
     if adata is None:
         return_adata = True
         import anndata as ad
