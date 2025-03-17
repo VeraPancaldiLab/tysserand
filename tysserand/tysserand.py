@@ -278,20 +278,30 @@ def find_trim_dist(dist, method='percentile_size', nb_nodes=None, perc=99):
 
 def build_delaunay(
     coords, 
-    node_adaptive_trimming=True, 
+    min_dist=0, 
+    trim_dist='percentile_size', 
+    perc=99, 
+    node_adaptive_trimming=False, 
     n_edges=3, 
     trim_dist_ratio=2,
-    min_dist=0, 
-    trim_dist=False, 
-    perc=99, 
     return_dist=False):
     """
     Reconstruct edges between nodes by Delaunay triangulation.
+    Use `trim_dist` to remove edges above a threshold distance.
+    Use `node_adaptive_trimming` to remove edges above a threshold 
+    distance adapted to the number of neighbors of each node.
 
     Parameters
     ----------
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
+    min_dist : float
+        Minimum distance threshold used witht the node adaptive trimming method.
+    trim_dist : str or float, optional
+        Method or distance used to delete reconstructed edges. 
+        Use 'percentile_size' to adapt this distance to the number of nodes.
+    perc : int or float, optional
+        The percentile of distances used as the threshold. The default is 99.
     node_adaptive_trimming : bool
         Method to trim edges with a distance threshold adapted for each node.
         For each node, the distance threshold is defined as the Nth smallest
@@ -301,13 +311,6 @@ def build_delaunay(
         The Nth smallest edge used to compute the trimming distance.
     trim_dist_ratio : float
         Ratio between the distance threshold and the Nth smallest distance.
-    min_dist : float
-        Minimum distance threshold used witht the node adaptive trimming method.
-    trim_dist : str or float, optional
-        Method or distance used to delete reconstructed edges. 
-        Use 'percentile_size' to adapt this distance to the number of nodes.
-    perc : int or float, optional
-        The percentile of distances used as the threshold. The default is 99.
     return_dist : bool, optional
         Whether distances are returned, usefull to try sevral trimming methods and parameters. 
         The default is False.
