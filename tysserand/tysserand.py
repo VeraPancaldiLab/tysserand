@@ -330,6 +330,7 @@ def build_delaunay(
     pairs = Voronoi(coords).ridge_points
 
     if node_adaptive_trimming:
+        trim_dist = False
         dist = distance_neighbors(coords, pairs)
         for node_id in range(len(coords)):
             select_src = np.where(pairs[:, 0] == node_id)[0]
