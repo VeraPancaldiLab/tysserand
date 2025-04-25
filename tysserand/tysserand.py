@@ -1186,10 +1186,10 @@ def rescale(data, perc_mini=1, perc_maxi=99,
         return data_out
 
 def plot_network(coords, pairs, disp_id=False, labels=None,
-                 color_mapper=None, legend=True, legend_opt=None,
+                 color_mapper=None, show_legend=True, legend_opt=None,
                  col_nodes=None, cmap_nodes=None, marker=None,
                  size_nodes=None, col_edges='k', alpha_edges=0.5, 
-                 linewidth=None,
+                 linewidth=None, skip_edges=False,
                  ax=None, figsize=(15, 15), aspect='equal', **kwargs):
     """
     Plot a network.
@@ -1200,10 +1200,14 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         Coordinates of points where each column corresponds to an axis (x, y, ...)
     pairs : ndarray
         The (n_pairs x 2) array of neighbors indices.
+    skip_edges : bool
+        If True, edges are not displayed.
     disp_id: bool
         If True nodes' indices are displayed.
     labels: panda series
         The nodes' labels from which they are colored.
+    show_legend : bool
+        If True, a legend is displayed.
     legend_opt : dict or None
         Optional parameters for the legend
         like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
@@ -1262,7 +1266,7 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
             color = color_mapper[label]
             ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
-        if legend:
+        if show_legend:
             if legend_opt is None:
                 ax.legend()
             else:
@@ -1271,9 +1275,10 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
         ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
-    for pair in pairs[:,:]:
-        [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges, linewidth=linewidth)
+    if not skip_edges:
+        for pair in pairs[:,:]:
+            [x0, y0], [x1, y1] = coords[pair]
+            ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges, linewidth=linewidth)
     if disp_id:
         offset=0.02
         for i, (x,y) in enumerate(coords):
