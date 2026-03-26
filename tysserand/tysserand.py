@@ -408,9 +408,9 @@ def build_delaunay(
     if trim_dist is not False:
         if not isinstance(trim_dist, (int, float)):
             trim_dist = find_trim_dist(D, method=trim_dist, perc=perc)
-        D = D.multiply(D < trim_dist)
+        D.data[D.data >= trim_dist] = 0
         D.eliminate_zeros()
-        A = (D > 0).astype(np.int8)
+        A = D.astype(bool).astype(np.int8)
 
     if return_dist:
         return A, D
@@ -718,7 +718,9 @@ def build_contacting(
     tgt = label_to_idx[np.concatenate(tgt_list)]
     data = np.ones(len(src), dtype=np.int8)
     A = csr_matrix((data, (src, tgt)), shape=(n_labels, n_labels))
-    return A.maximum(A.T).astype(np.int8)
+    A = A.maximum(A.T)
+    A.data[:] = 1  # collapse duplicate pixel contacts to binary adjacency
+    return A.astype(np.int8)
 
 
 def mask_val_coord(
