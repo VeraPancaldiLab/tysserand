@@ -669,18 +669,23 @@ def build_contacting(
     -------
     scipy.sparse.csr_matrix
         Symmetric CSR adjacency matrix of shape (n_labels, n_labels),
-        where node i corresponds to mask label i + 1.
+        where node indices are contiguous and follow the sorted order of
+        unique mask labels, matching the row order of `mask_val_coord`.
 
     Examples
     --------
     >>> A = build_contacting(masks, r=1)
-    >>> # Neighbors of mask label 5 (node index 4):
-    >>> neighbor_indices = A[4, :].indices  # 0-based node indices
-    >>> neighbor_labels = neighbor_indices + 1  # back to mask labels
+    >>> coords = mask_val_coord(masks)  # row i aligns with node i in A
     """
-    n_labels = masks.max()
+    unique_labels = np.unique(masks)
+    unique_labels = unique_labels[unique_labels > 0]  # exclude background
+    n_labels = len(unique_labels)
     if n_labels == 0:
         return csr_matrix((0, 0), dtype=np.int8)
+
+    # Lookup table: mask label -> contiguous 0-based index
+    label_to_idx = np.zeros(masks.max() + 1, dtype=int)
+    label_to_idx[unique_labels] = np.arange(n_labels)
 
     footprint = morphology.disk(r)
     offsets = np.argwhere(footprint) - r
@@ -708,72 +713,55 @@ def build_contacting(
     if not src_list:
         return csr_matrix((n_labels, n_labels), dtype=np.int8)
 
-    # Mask labels are 1-indexed; shift to 0-indexed node indices
-    src = np.concatenate(src_list) - 1
-    tgt = np.concatenate(tgt_list) - 1
+    # Remap mask labels to contiguous 0-based indices
+    src = label_to_idx[np.concatenate(src_list)]
+    tgt = label_to_idx[np.concatenate(tgt_list)]
     data = np.ones(len(src), dtype=np.int8)
     A = csr_matrix((data, (src, tgt)), shape=(n_labels, n_labels))
     return A.maximum(A.T).astype(np.int8)
 
 
-def mask_val_coord(masks):
+def mask_val_coord(
+    masks: np.ndarray,
+    as_array: bool = True,
+) -> np.ndarray:
     """
-    Compute the mapping between mask regions and their centroid coordinates.
+    Compute centroid coordinates of all labeled regions in a mask image.
+
+    Rows are returned in the sorted order of unique mask labels, matching
+    the contiguous 0-based node indexing used by `build_contacting`.
 
     Parameters
     ----------
-    masks : array_like
-        2D array of integers defining the identity of masks
-        0 is background (no object detected)
+    masks : np.ndarray
+        2D (or 3D) array of integers defining the identity of masks.
+        0 is background (no object detected).
+    as_array : bool, optional
+        If True (default), return a numpy array with columns ordered (x, y)
+        or (x, y, z). If False, return a DataFrame indexed by mask label.
 
     Returns
     -------
-    coords : dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    np.ndarray or pd.DataFrame
+        Centroid coordinates. As an array, shape is (n_labels, n_dims).
     """
-    
-    coords = measure.regionprops_table(masks, properties=('label', 'centroid'))
-    coords = pd.DataFrame.from_dict(coords)
+    props = measure.regionprops_table(masks, properties=('label', 'centroid'))
+    coords = pd.DataFrame.from_dict(props)
     if coords.shape[1] == 3:
-        coords.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
+        coords.rename(columns={'centroid-1': 'x', 'centroid-0': 'y'}, inplace=True)
     elif coords.shape[1] == 4:
-        coords.rename(columns={'centroid-2':'x', 'centroid-1':'y', 'centroid-0':'z'}, 
+        coords.rename(columns={'centroid-2': 'x', 'centroid-1': 'y', 'centroid-0': 'z'},
                       inplace=True)
     else:
         print('More than 3 detected spatial dimensions, check output column names.')
     coords.index = coords['label']
     coords.drop(columns='label', inplace=True)
+    if as_array:
+        dim_cols = [c for c in ('x', 'y', 'z') if c in coords.columns]
+        # regionprops_table returns labels in sorted order, so the output
+        # rows are in the same contiguous 0-based order used by build_contacting.
+        return coords.loc[:, dim_cols].values
     return coords
-
-def refactor_coords_pairs(coords, pairs):
-    """
-    Transforms coordinates and pairs of nodes data from segmented areas into
-    the formats used by the other functions for network analysis and visualization.
-
-    Parameters
-    ----------
-    coords : dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row, 
-        values correspond to values in masks, which are different from index
-        values of nodes
-
-    Returns
-    -------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row.
-    """
-    
-    mapper = dict(zip(coords.index, np.arange(coords.shape[0])))
-    pairs = pd.DataFrame({'source': pairs[:,0], 'target': pairs[:,1]})
-    pairs['source'] = pairs['source'].map(mapper)
-    pairs['target'] = pairs['target'].map(mapper)
-    coords = coords.loc[:, ['x', 'y']].values
-    pairs = pairs.loc[:, ['source', 'target']].values
-    return coords, pairs
 
 def link_solitaries(
     coords, 
