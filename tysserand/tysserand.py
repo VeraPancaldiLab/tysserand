@@ -612,27 +612,6 @@ def build_lattice(
         r = min_dist * r_factor
     return build_rdn(coords, r=r, coords_ref=coords_ref, **kwargs)
 
-def hyperdiagonal(coords):
-    """
-    Compute the maximum possible distance from a set of coordinates as the
-    diagonal of the (multidimensional) cube they occupy.
-
-    Parameters
-    ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-
-    Returns
-    -------
-    dist : float
-        Maximum possible distance.
-    """
-    
-    mini = coords.min(axis=0)
-    maxi = coords.max(axis=0)
-    dist = (maxi - mini)**2
-    dist = np.sqrt(dist.sum())
-    return dist
 
 def find_neighbors(masks, i, r=1):
     """
@@ -666,40 +645,76 @@ def find_neighbors(masks, i, r=1):
     # discard the background value
     return neighbors[neighbors != 0]
 
-def build_contacting(masks, r=1):
+
+def build_contacting(
+    masks: np.ndarray,
+    r: int = 1,
+) -> csr_matrix:
     """
-    Build a network from segmented regions that contact each other or are 
-    within a given distance from each other.
+    Build a CSR adjacency matrix from segmented regions that contact each other
+    or are within a given distance from each other.
+
+    Uses vectorized pixel-shift comparisons over the disk footprint instead of
+    per-label dilation, avoiding Python loops over labels entirely.
 
     Parameters
     ----------
-    masks : array_like
-        2D array of integers defining the identity of masks
-        0 is background (no object detected)
-    r : int
-        Radius of search.
+    masks : np.ndarray
+        2D array of integers defining the identity of masks.
+        0 is background (no object detected).
+    r : int, optional
+        Radius of search. The default is 1.
 
     Returns
     -------
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row, 
-        values correspond to values in masks, which are different from index
-        values of nodes
+    scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix of shape (n_labels, n_labels),
+        where node i corresponds to mask label i + 1.
 
+    Examples
+    --------
+    >>> A = build_contacting(masks, r=1)
+    >>> # Neighbors of mask label 5 (node index 4):
+    >>> neighbor_indices = A[4, :].indices  # 0-based node indices
+    >>> neighbor_labels = neighbor_indices + 1  # back to mask labels
     """
-    source_nodes = []
-    target_nodes = []
-    for i in range(1, masks.max()+1):
-        neigh = find_neighbors(masks, i, r=r)
-        source_nodes.append([i]*(neigh.size))
-        target_nodes.append(neigh)
-    # flatten arrays of arrays
-    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
-    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
-    # remove duplicate pairs
-    pairs = np.hstack((source_nodes, target_nodes))
-    pairs = remove_duplicate_pairs(pairs)
-    return pairs
+    n_labels = masks.max()
+    if n_labels == 0:
+        return csr_matrix((0, 0), dtype=np.int8)
+
+    footprint = morphology.disk(r)
+    offsets = np.argwhere(footprint) - r
+
+    src_list = []
+    tgt_list = []
+    for dy, dx in offsets:
+        # Only scan the positive half-plane to avoid duplicate edges
+        if dy < 0 or (dy == 0 and dx <= 0):
+            continue
+        # Array views for the original and shifted positions
+        sy_o = slice(max(0, -dy), masks.shape[0] - max(0, dy))
+        sx_o = slice(max(0, -dx), masks.shape[1] - max(0, dx))
+        sy_s = slice(max(0, dy), masks.shape[0] - max(0, -dy))
+        sx_s = slice(max(0, dx), masks.shape[1] - max(0, -dx))
+
+        m_o = masks[sy_o, sx_o]
+        m_s = masks[sy_s, sx_s]
+
+        contact = (m_o != m_s) & (m_o > 0) & (m_s > 0)
+        if contact.any():
+            src_list.append(m_o[contact])
+            tgt_list.append(m_s[contact])
+
+    if not src_list:
+        return csr_matrix((n_labels, n_labels), dtype=np.int8)
+
+    # Mask labels are 1-indexed; shift to 0-indexed node indices
+    src = np.concatenate(src_list) - 1
+    tgt = np.concatenate(tgt_list) - 1
+    data = np.ones(len(src), dtype=np.int8)
+    A = csr_matrix((data, (src, tgt)), shape=(n_labels, n_labels))
+    return A.maximum(A.T).astype(np.int8)
+
 
 def mask_val_coord(masks):
     """
