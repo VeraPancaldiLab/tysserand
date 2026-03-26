@@ -1259,62 +1259,65 @@ def rescale(data, perc_mini=1, perc_maxi=99,
     else:
         return data_out
 
-def plot_network(coords, pairs, disp_id=False, labels=None,
-                 color_mapper=None, show_legend=True, legend_opt=None,
-                 col_nodes=None, cmap_nodes=None, marker=None,
-                 size_nodes=None, col_edges='k', alpha_edges=0.5, 
-                 linewidth=None, skip_edges=False,
-                 ax=None, figsize=(15, 15), aspect='equal', **kwargs):
+def plot_network(
+    coords: np.ndarray,
+    A: csr_matrix,
+    disp_id: bool = False,
+    labels=None,
+    color_mapper=None, show_legend=True, legend_opt=None,
+    col_nodes=None, cmap_nodes=None, marker=None,
+    size_nodes=None, col_edges='k', alpha_edges=0.5,
+    linewidth=None, skip_edges=False,
+    ax=None, figsize=(15, 15), aspect='equal', **kwargs,
+):
     """
     Plot a network.
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
-    skip_edges : bool
-        If True, edges are not displayed.
-    disp_id: bool
-        If True nodes' indices are displayed.
-    labels: panda series
-        The nodes' labels from which they are colored.
-    show_legend : bool
-        If True, a legend is displayed.
-    legend_opt : dict or None
-        Optional parameters for the legend
-        like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
-    color_mapper: dict
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    disp_id : bool, optional
+        If True, nodes' indices are displayed. The default is False.
+    labels : array-like or pd.Series, optional
+        Node labels from which they are colored.
+    color_mapper : dict, optional
         Maps each label to its color. Computed if not provided.
-    figsize : (float, float), default: :rc:`figure.figsize`
-        Width, height in inches. The default is (15, 15).
-    col_nodes : str of matplotlib compatible color, optional
+    show_legend : bool, optional
+        If True, a legend is displayed. The default is True.
+    legend_opt : dict or None, optional
+        Optional parameters for the legend.
+    col_nodes : str, optional
         Color of nodes. The default is None.
-    cmap_nodes: list
+    cmap_nodes : list, optional
         List of hexadecimal colors for nodes attributes.
     marker : str, optional
         Marker used to display nodes. The default is None.
     size_nodes : int, optional
         Size of nodes. The default is None.
-    col_edges : str or matplotlib compatible color, optional
+    col_edges : str, optional
         Color of edges. The default is 'k'.
     alpha_edges : float, optional
-        Tansparency of edges. The default is 0.5.
+        Transparency of edges. The default is 0.5.
     linewidth : float, optional
         Width of edges. The default is None.
-    ax : matplotlib ax object, optional
+    skip_edges : bool, optional
+        If True, edges are not displayed. The default is False.
+    ax : matplotlib Axes, optional
         If provided, the plot is displayed in ax. The default is None.
     aspect : str, optional
-        Control aspect ration of the figure. The default is 'equal'.
+        Control aspect ratio of the figure. The default is 'equal'.
     **kwargs : dict
         Optional parameters to display nodes.
 
     Returns
     -------
-    None or (fig, ax) if not provided in parameters.
+    None or (fig, ax) if ax was not provided.
     """
-    
+    from matplotlib.collections import LineCollection
+
     if ax is None:
         ax_none = True
         fig, ax = plt.subplots(figsize=figsize)
@@ -1328,17 +1331,15 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
             uniq = labels.unique()
         else:
             uniq = np.unique(np.array(labels))
-        # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
-                cmap_nodes = sns.color_palette('muted').as_hex() 
-            # make a dictionnary attribute:color, with cycling over cmap
+                cmap_nodes = sns.color_palette('muted').as_hex()
             n_colors = len(cmap_nodes)
             color_mapper = {x: cmap_nodes[i % n_colors] for i, x in enumerate(uniq)}
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
-            ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
+            ax.scatter(coords[select, 0], coords[select, 1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
         if show_legend:
             if legend_opt is None:
@@ -1346,79 +1347,91 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
             else:
                 ax.legend(**legend_opt)
     else:
-        ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+        ax.scatter(coords[:, 0], coords[:, 1], c=col_nodes, cmap=cmap_nodes,
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
-    # plot edges
+    # plot edges using LineCollection
     if not skip_edges:
-        for pair in pairs[:,:]:
-            [x0, y0], [x1, y1] = coords[pair]
-            ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges, linewidth=linewidth)
+        rows, cols = A.nonzero()
+        mask = rows < cols  # upper triangle only for undirected edges
+        rows, cols = rows[mask], cols[mask]
+        segments = np.stack([coords[rows, :2], coords[cols, :2]], axis=1)
+        lc = LineCollection(
+            segments,
+            colors=col_edges,
+            alpha=alpha_edges,
+            linewidths=linewidth,
+            zorder=5,
+        )
+        ax.add_collection(lc)
+        ax.autoscale_view()
     if disp_id:
-        offset=0.02
-        for i, (x,y) in enumerate(coords):
-            plt.text(x-offset, y-offset, str(i), zorder=15)
+        offset = 0.02
+        for i, (x, y) in enumerate(coords):
+            ax.text(x - offset, y - offset, str(i), zorder=15)
     if aspect is not None:
         ax.set_aspect(aspect)
     if ax_none:
         return fig, ax
 
-def plot_network_distances(coords, pairs, distances, labels=None,
-                           color_mapper=None, legend=True, legend_opt=None,
-                           col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None, 
-                           cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
-                           figsize=(15, 15), ax=None, aspect='equal', **kwargs):
+def plot_network_distances(
+    coords: np.ndarray,
+    D: csr_matrix,
+    labels=None,
+    color_mapper=None, show_legend=True, legend_opt=None,
+    col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None,
+    cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
+    figsize=(15, 15), ax=None, aspect='equal', **kwargs,
+):
     """
     Plot a network with edges colored by their length.
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
-    distances : array
-        Distances between each pair of neighbors.
-    labels: panda series
-        The nodes' labels from which they are colored.
-    legend_opt : dict or None
-        Optional parameters for the legend
-        like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
-    color_mapper: dict
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    D : scipy.sparse.csr_matrix
+        CSR matrix of edge distances as returned by `distance_neighbors_csr`.
+    labels : array-like or pd.Series, optional
+        Node labels from which they are colored.
+    color_mapper : dict, optional
         Maps each label to its color. Computed if not provided.
-    col_nodes : str of matplotlib compatible color, optional
+    show_legend : bool, optional
+        If True, a legend is displayed. The default is True.
+    legend_opt : dict or None, optional
+        Optional parameters for the legend.
+    col_nodes : str, optional
         Color of nodes. The default is None.
-    cmap_nodes: list
+    cmap_nodes : list, optional
         List of hexadecimal colors for nodes attributes.
     marker : str, optional
         Marker used to display nodes. The default is None.
     size_nodes : float, optional
         Size of nodes. The default is None.
-    cmap_edges : str of matplotlib.colormap, optional
+    cmap_edges : str, optional
         Colormap of edges. The default is 'viridis'.
     alpha_edges : float, optional
-        Tansparency of edges. The default is 0.7.
+        Transparency of edges. The default is 0.7.
     linewidth : float, optional
         Width of edges. The default is None.
-    figsize : (float, float), default: :rc:`figure.figsize`
+    figsize : (float, float), optional
         Width, height in inches. The default is (15, 15).
-    ax : matplotlib ax object, optional
+    ax : matplotlib Axes, optional
         If provided, the plot is displayed in ax. The default is None.
     aspect : str, optional
-        Proportions of the figure. The default is None.
-    **kwargs : TYPE
-        labels of nodes.
+        Proportions of the figure. The default is 'equal'.
 
     Returns
     -------
-    None or (fig, ax) if not provided in parameters.
-
+    None or (fig, ax) if ax was not provided.
     """
-    
+    from matplotlib.collections import LineCollection
+
     if ax is None:
         ax_none = True
         fig, ax = plt.subplots(figsize=figsize)
     else:
         ax_none = False
+        fig = ax.get_figure()
     # plot nodes
     if labels is not None:
         if isinstance(labels, np.ndarray):
@@ -1427,39 +1440,47 @@ def plot_network_distances(coords, pairs, distances, labels=None,
             uniq = labels.unique()
         else:
             uniq = np.unique(np.array(labels))
-        # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
-                cmap_nodes = sns.color_palette('muted').as_hex() 
-            # make a dictionnary attribute:color, with cycling over cmap
+                cmap_nodes = sns.color_palette('muted').as_hex()
             n_colors = len(cmap_nodes)
             color_mapper = {x: cmap_nodes[i % n_colors] for i, x in enumerate(uniq)}
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
-            ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
+            ax.scatter(coords[select, 0], coords[select, 1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
-        if legend:
+        if show_legend:
             if legend_opt is None:
                 ax.legend()
             else:
                 ax.legend(**legend_opt)
     else:
-        ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+        ax.scatter(coords[:, 0], coords[:, 1], c=col_nodes, cmap=cmap_nodes,
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
-    scaled_dist, min_dist, max_dist = rescale(distances, return_extrema=True)
-    cmap = mpl.cm.viridis
-    norm = mpl.colors.Normalize(vmin=min_dist, vmax=max_dist)
-    for pair, dist in zip(pairs[:,:], scaled_dist):
-        [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges, linewidth=linewidth)
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
-                 orientation='vertical', label='Distance')
-    # TODO: plot many lines more efficiently check
-    # from https://stackoverflow.com/a/50029441
-    # https://matplotlib.org/gallery/shapes_and_collections/line_collection.html#sphx-glr-gallery-shapes-and-collections-line-collection-py
-    
+    rows, cols = D.nonzero()
+    # keep only upper triangle to draw each undirected edge once
+    mask = rows < cols
+    rows, cols = rows[mask], cols[mask]
+    distances = np.array(D[rows, cols]).ravel()
+
+    segments = np.stack([coords[rows, :2], coords[cols, :2]], axis=1)
+    cmap = mpl.cm.get_cmap(cmap_edges)
+    norm = mpl.colors.Normalize(vmin=distances.min(), vmax=distances.max())
+    lc = LineCollection(
+        segments,
+        cmap=cmap,
+        norm=norm,
+        alpha=alpha_edges,
+        linewidths=linewidth,
+        zorder=0,
+    )
+    lc.set_array(distances)
+    ax.add_collection(lc)
+    ax.autoscale_view()
+    fig.colorbar(lc, ax=ax, orientation='vertical', label='Distance')
+
     if aspect is not None:
         ax.set_aspect(aspect)
     if ax_none:
