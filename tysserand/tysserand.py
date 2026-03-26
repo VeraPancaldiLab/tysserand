@@ -1659,74 +1659,62 @@ def score_method(pairs_true, pairs_test):
     return true_pos_rate, false_pos_rate, false_neg_rate
 
 
-
-def to_NetworkX(nodes, edges, attributes=None):
+def to_NetworkX(
+    A: csr_matrix,
+    attributes: pd.DataFrame = None,
+):
     """
-    Convert tysserand network representation to a NetworkX network object
+    Convert a CSR adjacency matrix to a NetworkX graph.
 
     Parameters
     ----------
-    nodes : ndarray or dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    edges : ndarray or dataframe
-        The pairs of nodes given by their indices.
-    attributes : dataframe
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    attributes : pd.DataFrame, optional
         Attributes of nodes to be added in NetworkX. Default is None.
 
     Returns
     -------
-    G : NetworkX object
+    networkx.Graph
         The converted network.
     """
-    
     import networkx as nx
-    # convert to dataframe if numpy array
-    if isinstance(nodes, np.ndarray):
-        nodes = coords_to_df(nodes)
-    if isinstance(edges, np.ndarray):
-        edges = pairs_to_df(edges)
-    
-    G = nx.from_pandas_edgelist(edges)
+    G = nx.from_scipy_sparse_array(A)
     if attributes is not None:
         for col in attributes.columns:
-            # only for glm extension file:
-            # nx.set_node_attributes(G, attributes[col].to_dict(), col.replace('+','AND')) 
             nx.set_node_attributes(G, attributes[col].to_dict(), col)
     return G
 
-def to_iGraph(nodes, edges, attributes=None):
+def to_iGraph(
+    A: csr_matrix,
+    attributes: pd.DataFrame = None,
+    directed: bool = False,
+):
     """
-    Convert tysserand network representation to an iGraph network object
+    Convert a CSR adjacency matrix to an igraph graph.
 
     Parameters
     ----------
-    nodes : ndarray or dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    edges : ndarray or dataframe
-        The pairs of nodes given by their indices.
-    attributes : dataframe
-        Attributes of nodes to be added in NetworkX. Default is None.
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    attributes : pd.DataFrame, optional
+        Attributes of nodes to be added. Default is None.
+    directed : bool, optional
+        If False (default), build an undirected graph from the upper triangle
+        of A to avoid duplicate edges. If True, build a directed graph using
+        all non-zero entries.
 
     Returns
     -------
-    G : iGraph object
+    igraph.Graph
         The converted network.
     """
-    
     import igraph as ig
-    # convert to dataframe if numpy array
-    if isinstance(nodes, np.ndarray):
-        nodes = coords_to_df(nodes)
-    if isinstance(edges, np.ndarray):
-        edges = pairs_to_df(edges)
-    
-    # initialize empty graph
-    G = ig.Graph()
-    # add all the vertices
-    G.add_vertices(nodes.shape[0])
-    # add all the edges
-    G.add_edges(edges.values)
-    # add attributes
+    from scipy.sparse import triu
+    if directed:
+        G = ig.Graph.Adjacency(A, mode='directed')
+    else:
+        G = ig.Graph.Adjacency(triu(A, format='csr'), mode='upper')
     if attributes is not None:
         for col in attributes.columns:
             att = attributes[col].values
@@ -1736,101 +1724,103 @@ def to_iGraph(nodes, edges, attributes=None):
     return G
 
 def add_to_AnnData(
-    coords, 
-    pairs, 
+    coords: np.ndarray,
+    A: csr_matrix,
+    D: csr_matrix = None,
     adata=None,
     counts=None,
     obs_names=None,
     var_names=None,
-    return_adata=False,
-    network_metadata=None,
-    ):
-    """    
-    Convert tysserand network representation to sparse matrices
-    and add them to an AnnData (Scanpy) object, created if not provided.
+    return_adata: bool = False,
+    network_metadata: dict = None,
+):
+    """
+    Add a CSR network to an AnnData (Scanpy) object, created if not provided.
 
     Parameters
     ----------
-    nodes : ndarray
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    edges : ndarray
-        The pairs of nodes given by their indices.
-    adata : AnnData object
-        An object dedicated to single-cell data analysis. 
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    D : scipy.sparse.csr_matrix, optional
+        CSR distance matrix. If not provided, computed from `coords` and `A`.
+    adata : AnnData object, optional
         If not provided, it is created and returned.
+    counts : array-like, optional
+        Count matrix for AnnData creation. Ignored if `adata` is provided.
+    obs_names : array-like, optional
+        Observation names. Ignored if `adata` is provided.
+    var_names : array-like, optional
+        Variable names. Ignored if `adata` is provided.
+    return_adata : bool, optional
+        Whether to return the AnnData object. The default is False.
+    network_metadata : dict, optional
+        Metadata stored in `adata.uns['neighbors']`.
+
+    Returns
+    -------
+    AnnData or None
+        The AnnData object if `return_adata` is True or if it was created.
     """
-    
     if adata is None:
         return_adata = True
         import anndata as ad
         if counts is None:
-            # make dummy counts table
             counts = np.empty(shape=(len(coords), 1))
         adata = ad.AnnData(csr_matrix(counts))
-        return_adata = True
         if obs_names is not None:
             adata.obs_names = obs_names
         if var_names is not None:
             adata.var_names = var_names
-    
-    # convert arrays to sparse matrices
-    n_cells = adata.shape[0]
-    connect = np.ones(pairs.shape[0], dtype=np.int8)
-    sparse_connect = csr_matrix((connect, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.int8)
-    distances = distance_neighbors(coords, pairs)
-    sparse_dist = csr_matrix((distances, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.float)
-    
-    # add to AnnData object
+
+    if D is None:
+        D = distance_neighbors_csr(coords, A)
+
     adata.obsm['spatial'] = coords
-    adata.obsp['connectivities'] = sparse_connect
-    adata.obsp['distances'] = sparse_dist
+    adata.obsp['connectivities'] = A
+    adata.obsp['distances'] = D
     if network_metadata is None:
-        network_metadata = {'connectivities_key': 'connectivities', 
-                            'distances_key': 'distances', 
-                            'params': {'method': 'delaunay', 
-                                        'metric': 'euclidean', 
-                                        'edge_trimming': 'percentile 99'}}
+        network_metadata = {'connectivities_key': 'connectivities',
+                            'distances_key': 'distances',
+                            'params': {'method': 'delaunay',
+                                       'metric': 'euclidean',
+                                       'edge_trimming': 'percentile 99'}}
     adata.uns['neighbors'] = network_metadata
     if return_adata:
         return adata
 
 
-def get_from_AnnData(adata, key_edges='spatial_connectivities', is_symmetric=True):
+def get_from_AnnData(
+    adata,
+    key_connectivities: str = 'connectivities',
+    key_distances: str = 'distances',
+):
     """
-    Extract nodes and edges data from an AnnData object.
+    Extract network CSR matrices and coordinates from an AnnData object.
 
-    Parameter
-    ---------
+    Parameters
+    ----------
     adata : AnnData object
         An object dedicated to single-cell data analysis.
-    key_edges : str
-        Key where edges are stored.
-    is_symmetric : bool
-        Whether the network matrix is symmetric.
-    
+    key_connectivities : str, optional
+        Key in `adata.obsp` for the adjacency matrix. The default is 'connectivities'.
+    key_distances : str, optional
+        Key in `adata.obsp` for the distance matrix. The default is 'distances'.
+
     Returns
     -------
-    nodes : dataframe
-        Coordinates of nodes indicated by 'x', 'y' or other if required.
-    edges : ndarray
-        The pairs of nodes given by their indices.
+    coords : np.ndarray
+        Spatial coordinates from `adata.obsm['spatial']`.
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    D : scipy.sparse.csr_matrix
+        CSR distance matrix.
     """
-
-    nodes = pd.DataFrame(
-        data=adata.X.toarray(),
-        columns=adata.var_names,
-        index=adata.obs_names,
-    )
-    # merge with adata.obs?
-
-    if is_symmetric:
-        from scipy.sparse import triu
-        pairs = np.argwhere(triu(adata.obsp[key_edges] != 0))
-    else:
-        pairs = np.argwhere(adata.obsp[key_edges] != 0)
-    edges = pd.DataFrame(data=pairs, columns=['source', 'target'])
-
-    return nodes, edges
+    coords = adata.obsm['spatial']
+    A = csr_matrix(adata.obsp[key_connectivities])
+    D = csr_matrix(adata.obsp[key_distances])
+    return coords, A, D
 
 
 # --------------------------------------------------------------------
