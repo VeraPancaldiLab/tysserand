@@ -279,6 +279,7 @@ def find_trim_dist(
 
 def vectors_to_csr(
     pairs: np.ndarray,
+    n_nodes: int = None,
     out_dtype: np.dtype = np.int8,
 ) -> csr_matrix:
     """
@@ -288,6 +289,9 @@ def vectors_to_csr(
     ----------
     pairs : np.ndarray
         Array of shape (N_edges, 2) where each row is a [source, target] node index pair.
+    n_nodes : int, optional
+        Number of nodes. If None, inferred as ``pairs.max() + 1``. Pass explicitly
+        when isolated nodes (with no edges) are present to avoid a too-small matrix.
     out_dtype : np.dtype, optional
         Data type of the output matrix, by default np.int8.
 
@@ -296,7 +300,8 @@ def vectors_to_csr(
     A : scipy.sparse.csr_matrix
         Symmetric CSR adjacency matrix of shape (n_nodes, n_nodes) with entries of `out_dtype`.
     """
-    n_nodes = pairs.max() + 1
+    if n_nodes is None:
+        n_nodes = int(pairs.max()) + 1
     data = np.ones(len(pairs) * 2)  # undirected: store both directions
     rows = np.concatenate([pairs[:, 0], pairs[:, 1]])
     cols = np.concatenate([pairs[:, 1], pairs[:, 0]])
@@ -306,6 +311,7 @@ def vectors_to_csr(
 
 def vectors_to_csr_directed(
     pairs: np.ndarray,
+    n_nodes: int = None,
     out_dtype: np.dtype = np.int8,
 ) -> csr_matrix:
     """
@@ -315,6 +321,9 @@ def vectors_to_csr_directed(
     ----------
     pairs : np.ndarray
         Array of shape (N_edges, 2) where each row is a [source, target] node index pair.
+    n_nodes : int, optional
+        Number of nodes. If None, inferred as ``pairs.max() + 1``. Pass explicitly
+        when isolated nodes (with no edges) are present to avoid a too-small matrix.
     out_dtype : np.dtype, optional
         Data type of the output matrix, by default np.int8.
 
@@ -324,12 +333,55 @@ def vectors_to_csr_directed(
         Asymmetric CSR adjacency matrix of shape (n_nodes, n_nodes) with entries of `out_dtype`,
         where A[i, j] = 1 indicates an edge from node i to node j.
     """
-    n_nodes = pairs.max() + 1
+    if n_nodes is None:
+        n_nodes = int(pairs.max()) + 1
     data = np.ones(len(pairs))
     rows = pairs[:, 0]
     cols = pairs[:, 1]
     A = csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes)).astype(out_dtype)
     return A
+
+
+def csr_to_edge_pairs(A: csr_matrix) -> np.ndarray:
+    """
+    Extract upper-triangle edge pairs from an undirected CSR adjacency matrix.
+
+    Parameters
+    ----------
+    A : scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix.
+
+    Returns
+    -------
+    pairs : np.ndarray
+        Array of shape (n_edges, 2) with one row per undirected edge.
+    """
+    rows, cols = A.nonzero()
+    mask = rows < cols
+    return np.vstack([rows[mask], cols[mask]]).T
+
+
+def csr_to_edge_coords(coords: np.ndarray, A: csr_matrix) -> list:
+    """
+    Convert a CSR adjacency matrix to a list of edge coordinate arrays
+    suitable for a napari Shapes layer.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Node coordinates in napari convention (row, col order), shape (n_nodes, ndim).
+        These should already have been flipped by :func:`convert_nodes_tys_to_nap`.
+    A : scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix.
+
+    Returns
+    -------
+    edges_coords : list of np.ndarray
+        List of (2, ndim) arrays, one per undirected edge, giving the coordinates
+        of its two endpoints.
+    """
+    pairs = csr_to_edge_pairs(A)
+    return [coords[pair] for pair in pairs]
 
 
 def build_delaunay(
@@ -1870,22 +1922,64 @@ def get_annotation_names(viewer):
     return layer_nodes_name, layer_edges_name
 
 def convert_nodes_tys_to_nap(coords):
+    """
+    Reverse the x, y, z ordering of nodes coordinates to match napari's convention.
+    """
     new_nodes = coords[:, ::-1]
     return new_nodes
 
 def convert_edges_tys_to_nap(coords, pairs):
+    """
+    Make start and end coordinates of edges for napari.
+
+    .. deprecated::
+        Use :func:`csr_to_edge_coords` instead, which accepts a CSR adjacency matrix directly.
+    """
+    import warnings
+    warnings.warn(
+        "convert_edges_tys_to_nap is deprecated; use csr_to_edge_coords(coords, A) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     new_edges = []
     for pair in pairs[:,:]:
         new_edges.append(np.array(coords[pair]))
     return new_edges
 
-def make_annotation_dict(coords, pairs=None,
+def make_annotation_dict(coords, A=None, pairs=None,
                          nodes_class=None,
                          nodes_class_color_mapper=None,
                          ):
     """
-    Create a dictionnary of annotations from tysserand network objects.
+    Create a dictionary of annotations from tysserand network objects.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Node coordinates in tysserand convention (x, y, ...), shape (n_nodes, ndim).
+    A : scipy.sparse.csr_matrix, optional
+        CSR adjacency matrix. Preferred over `pairs`.
+    pairs : np.ndarray, optional
+        Deprecated. Edge list of shape (n_edges, 2). Use `A` instead.
+    nodes_class : array-like, optional
+        Class label per node.
+    nodes_class_color_mapper : dict, optional
+        Maps each class label to a color.
+
+    Returns
+    -------
+    annotations : dict
     """
+    import warnings
+    if pairs is not None:
+        warnings.warn(
+            "The `pairs` argument to make_annotation_dict is deprecated; "
+            "pass A (csr_matrix) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if A is None:
+            A = vectors_to_csr(pairs, n_nodes=len(coords))
 
     annotations = {}
     new_nodes = convert_nodes_tys_to_nap(coords)
@@ -1894,8 +1988,9 @@ def make_annotation_dict(coords, pairs=None,
         annotations['nodes_class'] = nodes_class
     if nodes_class_color_mapper is not None:
         annotations['nodes_class_color_mapper'] = nodes_class_color_mapper
-    if pairs is not None:
-        annotations['edges_coords'] = convert_edges_tys_to_nap(new_nodes, pairs)
+    if A is not None:
+        annotations['edges_coords'] = csr_to_edge_coords(new_nodes, A)
+        annotations['A'] = A
     return annotations
 
 def get_annotation_dict(viewer, layer_nodes_name, layer_edges_name):
@@ -2013,27 +2108,43 @@ def add_annotations(
         add_edges(viewer, annotations, edge_color=edge_color, name=layer_edges_name)
     return
 
-def assign_nodes_to_edges(nodes, edges):
+def assign_nodes_to_edges(nodes, edges, n_nodes=None):
     """
-    Link edges extremities to nodes and compute the matrix
-    of pairs of nodes indices.
-    """
+    Snap edge endpoints to nearest nodes and return a CSR adjacency matrix.
 
+    Parameters
+    ----------
+    nodes : np.ndarray
+        Node coordinates in napari convention, shape (n_nodes, ndim).
+    edges : list of np.ndarray
+        Napari Shapes edge data: list of (2, ndim) arrays, one per edge.
+    n_nodes : int, optional
+        Total number of nodes. If None, ``len(nodes)`` is used. Pass explicitly
+        when isolated nodes are present to ensure the CSR matrix has the correct size.
+
+    Returns
+    -------
+    new_edges : list of np.ndarray
+        Snapped edge coordinates in napari format (same structure as `edges`).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix recovered from the snapped edges.
+    """
     from scipy.spatial import cKDTree
-    
+
+    if n_nodes is None:
+        n_nodes = len(nodes)
+
     edges_arr = np.vstack(edges)
     kdt_nodes = cKDTree(nodes)
 
-    # closest node id and discard computed distances ('_,')
+    # closest node id; discard computed distances
     _, pairs = kdt_nodes.query(x=edges_arr, k=1)
-    # refactor list of successive ids for start and end of edges into 2D array
+    # reshape flat list [src0, tgt0, src1, tgt1, ...] into (n_edges, 2)
     pairs = np.vstack((pairs[::2], pairs[1::2])).T
 
-    new_edges = []
-    for pair in pairs[:,:]:
-        new_edges.append(np.array(nodes[pair]))
-    
-    return new_edges, pairs
+    new_edges = [np.array(nodes[pair]) for pair in pairs]
+    A = vectors_to_csr(pairs, n_nodes=n_nodes)
+    return new_edges, A
 
 def update_edges(
     viewer, 
