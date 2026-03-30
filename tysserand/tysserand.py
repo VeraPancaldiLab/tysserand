@@ -277,6 +277,60 @@ def find_trim_dist(
     return float(np.percentile(dist, perc))
 
 
+def weight_from_distance(
+    D: csr_matrix,
+    weight_range: tuple = None,
+) -> csr_matrix:
+    """
+    Compute edge weights from a CSR distance matrix, with shorter distances
+    receiving higher weights (inverse linear mapping).
+
+    Parameters
+    ----------
+    D : scipy.sparse.csr_matrix
+        CSR matrix of edge distances as returned by `distance_neighbors`.
+    weight_range : tuple of (float, float), optional
+        Custom weight range (low, high). The shortest distance is mapped to `high`
+        and the longest distance to `low`. If None, the range is automatically set
+        to (d_min / d_max, 1) where d_min and d_max are the minimum and maximum
+        distances. The default is None.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        CSR matrix with the same sparsity structure as `D`, where each non-zero
+        entry holds the computed weight.
+
+    Examples
+    --------
+    >>> coords = make_simple_coords()
+    >>> A = build_delaunay(coords, trim_dist=False)
+    >>> D = distance_neighbors(coords, A)
+    >>> W = weight_from_distance(D)
+    >>> W_custom = weight_from_distance(D, weight_range=(0.1, 5.0))
+    """
+    W = D.copy()
+
+    if len(W.data) == 0:
+        return W
+
+    d_min = W.data.min()
+    d_max = W.data.max()
+
+    if weight_range is None:
+        w_low = d_min / d_max
+        w_high = 1.0
+    else:
+        w_low, w_high = weight_range
+
+    if d_max == d_min:
+        W.data[:] = w_high
+    else:
+        W.data = w_high - (W.data - d_min) * (w_high - w_low) / (d_max - d_min)
+
+    return W
+
+
 def vectors_to_csr(
     pairs: np.ndarray,
     n_nodes: int = None,
