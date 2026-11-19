@@ -219,349 +219,451 @@ def remove_duplicate_pairs(pairs):
     uniq_pairs = np.unique(np.sort(pairs, axis=1), axis=0)
     return uniq_pairs
 
-def distance_neighbors(coords, pairs):
+
+def distance_neighbors(
+    coords: np.ndarray,
+    A: csr_matrix,
+) -> csr_matrix:
     """
-    Compute all distances between neighbors in a network.
-    
+    Compute edge lengths from a CSR adjacency matrix, returning a CSR matrix of distances.
+
     Parameters
     ----------
-    coords : dataframe
-        Coordinates of points where columns are 'x', 'y', ...
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
+    coords : np.ndarray
+        Coordinates of points, shape (n_nodes, n_dims).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix of shape (n_nodes, n_nodes).
 
     Returns
     -------
-    distances : array
-        Distances between each pair of neighbors.
+    scipy.sparse.csr_matrix
+        CSR matrix of the same sparsity structure as `A`, where each non-zero entry
+        holds the Euclidean distance between the corresponding pair of nodes.
     """
-    
-    # source nodes coordinates
-    c0 = coords[pairs[:,0]]
-    # target nodes coordinates
-    c1 = coords[pairs[:,1]]
-    distances = (c0 - c1)**2
-    distances = np.sqrt(distances.sum(axis=1))
-    return distances
+    rows, cols = A.nonzero()
+    distances = np.sqrt(((coords[rows] - coords[cols]) ** 2).sum(axis=1))
+    return csr_matrix((distances, (rows, cols)), shape=A.shape)
 
-def find_trim_dist(dist, method='percentile_size', nb_nodes=None, perc=99):
+
+def find_trim_dist(
+    D: csr_matrix,
+    method: str = 'percentile_size',
+    perc: float = 99,
+) -> float:
     """
     Find the distance threshold to eliminate reconstructed edges in a network.
 
     Parameters
     ----------
-    dist : array
-        Distances between pairs of nodes.
+    D : scipy.sparse.csr_matrix
+        CSR matrix of edge distances as returned by `distance_neighbors`.
     method : str, optional
-        Method used to compute the threshold. The default is 'percentile_size'.
-        This methods defines an optimal percentile value of distances above which
-        edges are discarded.
-    nb_nodes : int , optional
-        The number of nodes in the network used by the 'percentile_size' method.
-    perc : int or float, optional
-        The percentile of distances used as the threshold. The default is 99.
+        Method used to compute the threshold. The default is 'percentile_size',
+        which derives an optimal percentile from the number of nodes.
+    perc : float, optional
+        Percentile of distances used as the threshold when method is 'percentile'.
+        The default is 99.
 
     Returns
     -------
-    dist_thresh : float
+    float
         Threshold distance.
     """
+    dist = D.data
     if method == 'percentile_size':
-        prop_edges = 4 / nb_nodes**(0.5)
+        nb_nodes = D.shape[0]
+        prop_edges = 4 / nb_nodes ** 0.5
         perc = 100 * (1 - prop_edges * 0.5)
-        dist_thresh = np.percentile(dist, perc)
-            
-    elif method == 'percentile':
-        dist_thresh = np.percentile(dist, perc)
-        
-    return dist_thresh
+    return float(np.percentile(dist, perc))
+
+
+def vectors_to_csr(
+    pairs: np.ndarray,
+    n_nodes: int = None,
+    out_dtype: np.dtype = np.int8,
+) -> csr_matrix:
+    """
+    Convert an edge list to an undirected CSR adjacency matrix.
+
+    Parameters
+    ----------
+    pairs : np.ndarray
+        Array of shape (N_edges, 2) where each row is a [source, target] node index pair.
+    n_nodes : int, optional
+        Number of nodes. If None, inferred as ``pairs.max() + 1``. Pass explicitly
+        when isolated nodes (with no edges) are present to avoid a too-small matrix.
+    out_dtype : np.dtype, optional
+        Data type of the output matrix, by default np.int8.
+
+    Returns
+    -------
+    A : scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix of shape (n_nodes, n_nodes) with entries of `out_dtype`.
+    """
+    if n_nodes is None:
+        n_nodes = int(pairs.max()) + 1
+    data = np.ones(len(pairs) * 2)  # undirected: store both directions
+    rows = np.concatenate([pairs[:, 0], pairs[:, 1]])
+    cols = np.concatenate([pairs[:, 1], pairs[:, 0]])
+    A = csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes)).astype(out_dtype)
+    return A
+
+
+def vectors_to_csr_directed(
+    pairs: np.ndarray,
+    n_nodes: int = None,
+    out_dtype: np.dtype = np.int8,
+) -> csr_matrix:
+    """
+    Convert an edge list to a directed CSR adjacency matrix.
+
+    Parameters
+    ----------
+    pairs : np.ndarray
+        Array of shape (N_edges, 2) where each row is a [source, target] node index pair.
+    n_nodes : int, optional
+        Number of nodes. If None, inferred as ``pairs.max() + 1``. Pass explicitly
+        when isolated nodes (with no edges) are present to avoid a too-small matrix.
+    out_dtype : np.dtype, optional
+        Data type of the output matrix, by default np.int8.
+
+    Returns
+    -------
+    A : scipy.sparse.csr_matrix
+        Asymmetric CSR adjacency matrix of shape (n_nodes, n_nodes) with entries of `out_dtype`,
+        where A[i, j] = 1 indicates an edge from node i to node j.
+    """
+    if n_nodes is None:
+        n_nodes = int(pairs.max()) + 1
+    data = np.ones(len(pairs))
+    rows = pairs[:, 0]
+    cols = pairs[:, 1]
+    A = csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes)).astype(out_dtype)
+    return A
+
+
+def csr_to_edge_pairs(A: csr_matrix) -> np.ndarray:
+    """
+    Extract upper-triangle edge pairs from an undirected CSR adjacency matrix.
+
+    Parameters
+    ----------
+    A : scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix.
+
+    Returns
+    -------
+    pairs : np.ndarray
+        Array of shape (n_edges, 2) with one row per undirected edge.
+    """
+    rows, cols = A.nonzero()
+    mask = rows < cols
+    return np.vstack([rows[mask], cols[mask]]).T
+
+
+def csr_to_edge_coords(coords: np.ndarray, A: csr_matrix) -> list:
+    """
+    Convert a CSR adjacency matrix to a list of edge coordinate arrays
+    suitable for a napari Shapes layer.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Node coordinates in napari convention (row, col order), shape (n_nodes, ndim).
+        These should already have been flipped by :func:`convert_nodes_tys_to_nap`.
+    A : scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix.
+
+    Returns
+    -------
+    edges_coords : list of np.ndarray
+        List of (2, ndim) arrays, one per undirected edge, giving the coordinates
+        of its two endpoints.
+    """
+    pairs = csr_to_edge_pairs(A)
+    return [coords[pair] for pair in pairs]
+
 
 def build_delaunay(
-    coords, 
-    min_dist=0, 
-    trim_dist='percentile_size', 
-    perc=99, 
-    node_adaptive_trimming=False, 
-    n_edges=3, 
-    trim_dist_ratio=2,
-    return_dist=False):
+    coords: np.ndarray,
+    min_dist: float = 0,
+    trim_dist = 'percentile_size',
+    perc: float = 99,
+    node_adaptive_trimming: bool = False,
+    n_edges: int = 3,
+    trim_dist_ratio: float = 2,
+    return_dist: bool = False,
+):
     """
-    Reconstruct edges between nodes by Delaunay triangulation.
+    Reconstruct edges between nodes by Delaunay triangulation, returning a CSR adjacency matrix.
     Use `trim_dist` to remove edges above a threshold distance.
-    Use `node_adaptive_trimming` to remove edges above a threshold 
+    Use `node_adaptive_trimming` to remove edges above a threshold
     distance adapted to the number of neighbors of each node.
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    min_dist : float
-        Minimum distance threshold used witht the node adaptive trimming method.
-    trim_dist : str or float, optional
-        Method or distance used to delete reconstructed edges. 
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    min_dist : float, optional
+        Minimum distance threshold used with the node adaptive trimming method.
+    trim_dist : str, float, or False, optional
+        Method or distance used to delete reconstructed edges.
         Use 'percentile_size' to adapt this distance to the number of nodes.
-    perc : int or float, optional
-        The percentile of distances used as the threshold. The default is 99.
-    node_adaptive_trimming : bool
-        Method to trim edges with a distance threshold adapted for each node.
-        For each node, the distance threshold is defined as the Nth smallest
-        edge length x `trim_dist_ratio`. Edges with length above this threshold
-        and a minimum distance `min_dist` are discarded.
-    n_edges : int
-        The Nth smallest edge used to compute the trimming distance.
-    trim_dist_ratio : float
+        Set to False to skip global trimming.
+    perc : float, optional
+        Percentile of distances used as the threshold when method is 'percentile'.
+        The default is 99.
+    node_adaptive_trimming : bool, optional
+        Whether to trim edges with a distance threshold adapted for each node.
+        For each node, the threshold is the Nth smallest edge length x `trim_dist_ratio`.
+        Edges above this threshold and above `min_dist` are discarded.
+    n_edges : int, optional
+        The Nth smallest edge used to compute the per-node trimming distance.
+    trim_dist_ratio : float, optional
         Ratio between the distance threshold and the Nth smallest distance.
     return_dist : bool, optional
-        Whether distances are returned, usefull to try sevral trimming methods and parameters. 
-        The default is False.
-    
+        Whether to also return the CSR distance matrix. The default is False.
+
+    Returns
+    -------
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix of the reconstructed network.
+    D : scipy.sparse.csr_matrix
+        CSR matrix of edge distances, only returned when `return_dist` is True.
+
     Examples
     --------
     >>> coords = make_simple_coords()
-    >>> pairs = build_delaunay(coords, trim_dist=False)
-
-    Returns
-    -------
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
+    >>> A = build_delaunay(coords, trim_dist=False)
     """
-
-    # pairs of indices of neighbors
     pairs = Voronoi(coords).ridge_points
+    A = vectors_to_csr(pairs)
+
+    if node_adaptive_trimming or trim_dist is not False or return_dist:
+        D = distance_neighbors(coords, A)
 
     if node_adaptive_trimming:
         trim_dist = False
-        dist = distance_neighbors(coords, pairs)
         for node_id in range(len(coords)):
-            select_src = np.where(pairs[:, 0] == node_id)[0]
-            select_trg = np.where(pairs[:, 1] == node_id)[0]
-            pairs_ids = np.hstack([select_src, select_trg]) # array of indices, not a boolean vector
-            node_distances = dist[pairs_ids]
+            d_row = D.getrow(node_id)
+            neighbor_ids = d_row.indices
+            node_distances = d_row.data
             if len(node_distances) > n_edges:
-                # use the Nth smallest edge to compute the distance threshold
-                thresh_dist = np.sort(node_distances)[n_edges-1] * trim_dist_ratio
-                # filter distances above threshold and above minimum edge length
-                discard = np.logical_and(node_distances > thresh_dist, node_distances > min_dist)
-                discard_ids = pairs_ids[discard]
-                pairs = np.delete(pairs, discard_ids, axis=0)
-                dist = np.delete(dist, discard_ids)
+                thresh_dist = np.sort(node_distances)[n_edges - 1] * trim_dist_ratio
+                discard_mask = (node_distances > thresh_dist) & (node_distances > min_dist)
+                for j in neighbor_ids[discard_mask]:
+                    D[node_id, j] = 0
+                    D[j, node_id] = 0
+        D.eliminate_zeros()
+        A = (D > 0).astype(np.int8)
 
-    if trim_dist is not False:  # can be str or float
-        # remove edges with length above threshold distance
-        dist = distance_neighbors(coords, pairs)
+    if trim_dist is not False:
         if not isinstance(trim_dist, (int, float)):
-            trim_dist = find_trim_dist(dist=dist, method=trim_dist, nb_nodes=coords.shape[0], perc=perc)
-        pairs = pairs[dist < trim_dist, :]
-    return pairs
+            trim_dist = find_trim_dist(D, method=trim_dist, perc=perc)
+        D.data[D.data >= trim_dist] = 0
+        D.eliminate_zeros()
+        A = D.astype(bool).astype(np.int8)
 
-def pairs_from_knn(ind):
+    if return_dist:
+        return A, D
+    return A
+
+
+def build_knn(
+    coords: np.ndarray,
+    k: int = 6,
+    approximate: bool = True,
+    metric: str = 'euclidean',
+    n_jobs: int = -1,
+    undirected: bool = True,
+    **kwargs,
+) -> csr_matrix:
     """
-    Convert a matrix of Neirest Neighbors indices into 
-    a matrix of unique pairs of neighbors
-
-    Parameters
-    ----------
-    ind : ndarray
-        The (n_objects x n_neighbors) matrix of neighbors indices.
-
-    Returns
-    -------
-    pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices.
-    """
-    
-    NN = ind.shape[1]
-    source_nodes = np.repeat(ind[:,0], NN-1).reshape(-1,1)
-    target_nodes = ind[:,1:].reshape(-1,1)
-    pairs = np.hstack((source_nodes, target_nodes))
-    pairs = remove_duplicate_pairs(pairs)
-    return pairs
-
-def build_knn(coords, k=6, approximate=True, metric='euclidean', n_jobs=-1, **kwargs):
-    """
-    Reconstruct edges between nodes by k-nearest neighbors (knn) method.
+    Reconstruct edges between nodes by k-nearest neighbors (knn) method,
+    returning a CSR adjacency matrix.
     An edge is drawn between each node and its k nearest neighbors.
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
     k : int, optional
         Number of nearest neighbors. The default is 6.
-    approximate : bool, True
-        Whether fast appriximation is authorized for networks >= 3000 nodes.
-    metric: string or callable (optional, default='euclidean')
-        The metric to use for computing nearest neighbors.
+    approximate : bool, optional
+        Whether fast approximation is authorized for networks >= 3000 nodes.
+    metric : str or callable, optional
+        The metric to use for computing nearest neighbors. The default is 'euclidean'.
         See pynndescent documentation.
-    n_jobs: int or None, optional (default=-1)
+    n_jobs : int or None, optional
         The number of parallel jobs to run for neighbors index construction.
         ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
         ``-1`` means using all processors.
-    
-    Examples
-    --------
-    >>> coords = make_simple_coords()
-    >>> pairs = build_knn(coords)
 
     Returns
     -------
-    pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices.
+    scipy.sparse.csr_matrix
+        CSR adjacency matrix of the reconstructed network.
+
+    Examples
+    --------
+    >>> coords = make_simple_coords()
+    >>> A = build_knn(coords)
     """
-    
     if len(coords) < 3000 or not approximate:
         tree = BallTree(coords, **kwargs)
-        _, neighbors = tree.query(coords, k=k+1) # the first k is "oneself"
+        _, neighbors = tree.query(coords, k=k + 1)  # first neighbor is oneself
     else:
         n_index = min(k, len(coords))
-        # JIT warmup with small fake network
-        warmup_coords = np.random.random(size=(n_index+2, coords.shape[1]))
+        warmup_coords = np.random.random(size=(n_index + 2, coords.shape[1]))
         warmup_index = pynndescent.NNDescent(
-            coords, 
-            metric=metric, 
-            n_neighbors=n_index+1, 
+            warmup_coords,
+            metric=metric,
+            n_neighbors=n_index + 1,
             n_jobs=n_jobs,
-            )
-        # actual knn network building
+        )
         index = pynndescent.NNDescent(
-            coords, 
-            metric=metric, 
-            n_neighbors=n_index+1, 
+            coords,
+            metric=metric,
+            n_neighbors=n_index + 1,
             n_jobs=n_jobs,
-            )
+        )
         neighbors = index.neighbor_graph[0]
-    pairs = pairs_from_knn(neighbors)
-    return pairs
+    
+    # convert from BallTree query format to CSR matrix
+    n_nodes = neighbors.shape[0]
+    src = np.repeat(neighbors[:, 0], k)
+    tgt = neighbors[:, 1:].ravel()
+    data = np.ones(len(src), dtype=np.int8)
+    A = csr_matrix((data, (src, tgt)), shape=(n_nodes, n_nodes))
+    A = A.maximum(A.T).astype(np.int8)
+    if undirected:
+        A = A.maximum(A.T)
 
-def build_rdn(coords, r, coords_ref=None, **kwargs):
+    return A.astype(np.int8)
+
+
+def build_rdn(
+    coords: np.ndarray,
+    r: float,
+    coords_ref: np.ndarray = None,
+    **kwargs,
+) -> csr_matrix:
     """
-    Reconstruct edges between nodes by radial distance neighbors (rdn) method.
-    An edge is drawn between each node and the nodes closer 
+    Reconstruct edges between nodes by radial distance neighbors (rdn) method,
+    returning a CSR adjacency matrix.
+    An edge is drawn between each node and the nodes closer
     than a threshold distance (within a radius).
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    r : float, optional
-        Radius in which nodes are connected.
-    coords_ref : ndarray, optional
-        Source points in the network, `pairs` will indicate edges from `coords_ref`
-        to `coords`, if None, `coords` is used, the network is undirected.
-    
-    Examples
-    --------
-    >>> coords = make_simple_coords()
-    >>> pairs = build_rdn(coords, r=60)
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    r : float
+        Radius within which nodes are connected.
+    coords_ref : np.ndarray, optional
+        Source points in the network. If provided, edges go from `coords_ref` to `coords`
+        and the output matrix has shape (len(coords_ref), len(coords)).
+        If None, `coords` is used and the network is undirected.
 
     Returns
     -------
-    pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices.
+    scipy.sparse.csr_matrix
+        CSR adjacency matrix of the reconstructed network.
+        Symmetric of shape (n, n) when `coords_ref` is None,
+        or directed of shape (n_ref, n) otherwise.
+
+    Examples
+    --------
+    >>> coords = make_simple_coords()
+    >>> A = build_rdn(coords, r=60)
     """
-    
     tree = BallTree(coords, **kwargs)
     if coords_ref is None:
-        ind = tree.query_radius(coords, r=r)
+        query_coords = coords
+        n_src = n_tgt = len(coords)
     else:
-        ind = tree.query_radius(coords_ref, r=r)
-    # clean arrays of neighbors from self referencing neighbors
-    # and aggregate at the same time
-    source_nodes = []
-    target_nodes = []
+        query_coords = coords_ref
+        n_src, n_tgt = len(coords_ref), len(coords)
+    ind = tree.query_radius(query_coords, r=r)
+    # Find the self-index of each query point in the tree (distance == 0 means the
+    # query point is present in the tree and would create a self-loop).
+    self_dists, self_idx = tree.query(query_coords, k=1)
+    self_dists = self_dists.ravel()
+    self_idx = self_idx.ravel()
+    src_list = []
+    tgt_list = []
     for i, arr in enumerate(ind):
-        neigh = arr[arr != i]
-        source_nodes.append([i]*(neigh.size))
-        target_nodes.append(neigh)
-    # flatten arrays of arrays
-    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
-    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
-    # remove duplicate pairs
-    pairs = np.hstack((source_nodes, target_nodes))
+        neigh = arr[arr != self_idx[i]] if self_dists[i] == 0 else arr
+        src_list.append(np.full(len(neigh), i, dtype=int))
+        tgt_list.append(neigh)
+    src = np.concatenate(src_list)
+    tgt = np.concatenate(tgt_list)
+    data = np.ones(len(src), dtype=np.int8)
+    A = csr_matrix((data, (src, tgt)), shape=(n_src, n_tgt))
     if coords_ref is None:
-        pairs = remove_duplicate_pairs(pairs)
-    return pairs
+        A = A.maximum(A.T).astype(np.int8)
+    return A
 
-def build_lattice(coords, r=None, coords_ref=None, lattice='hexagonal', r_factor=None, **kwargs):
+
+
+def build_lattice(
+    coords: np.ndarray,
+    r: float = None,
+    coords_ref: np.ndarray = None,
+    lattice: str = 'hexagonal',
+    r_factor: float = None,
+    **kwargs,
+) -> csr_matrix:
     """
-    Reconstruct edges between nodes organized on a lattice.
-    The lattice can be a hexagonal, square, or cubic (3D).
-    An edge is drawn between each node and the nodes closer 
+    Reconstruct edges between nodes organized on a lattice, returning a CSR adjacency matrix.
+    The lattice can be hexagonal, square, or cubic (3D).
+    An edge is drawn between each node and the nodes closer
     than a threshold distance (within a radius).
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
     r : float, optional
-        Radius in which nodes are connected. If not provided, it is guessed from data.
-    coords_ref : ndarray, optional
-        Source points in the network, `pairs` will indicate edges from `coords_ref`
-        to `coords`, if None, `coords` is used, the network is undirected.
-    r_factor : float
-        Factor to include nodes in 'diagonals' if `r` is not provided.
-    lattice : str
-        Type of spatial organization of nodes. It can be 'hexagonal', 'square' or 'cubic'.
-        Used to set `r_factor` if not provided.
+        Radius within which nodes are connected. If not provided, it is guessed from data.
+    coords_ref : np.ndarray, optional
+        Source points in the network. If provided, edges go from `coords_ref` to `coords`
+        and the output matrix has shape (len(coords_ref), len(coords)).
+        If None, `coords` is used and the network is undirected.
+    lattice : str, optional
+        Type of spatial organization of nodes. Can be 'hexagonal', 'square', or 'cubic'.
+        Used to set `r_factor` if not provided. The default is 'hexagonal'.
+    r_factor : float, optional
+        Multiplicative factor applied to the minimum inter-node distance to obtain `r`.
+        Inferred from `lattice` if not provided.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        CSR adjacency matrix of the reconstructed network.
+        Symmetric of shape (n, n) when `coords_ref` is None,
+        or directed of shape (n_ref, n) otherwise.
+
+    Examples
+    --------
+    >>> coords = make_simple_coords()
+    >>> A = build_lattice(coords)
     """
-    
     tree = BallTree(coords, **kwargs)
     if r is None:
-        # guess minimum distance between nodes
-        _, ind = tree.query(coords, k=2) # the first k is "oneself"
-        pairs = pairs_from_knn(ind)
-        min_dist = np.min(distance_neighbors(coords, pairs))
+        # derive minimum inter-node distance from nearest neighbor distances
+        min_dists, _ = tree.query(coords, k=2)  # column 0 is self (dist=0)
+        min_dist = min_dists[:, 1].min()
         if r_factor is None:
             if lattice == 'hexagonal':
                 r_factor = 1.5
             elif lattice == 'square':
                 r_factor = np.sqrt(2) * 1.01
-            elif lattice == 'cube':
+            elif lattice == 'cubic':
                 r_factor = np.sqrt(3) * 1.01
         r = min_dist * r_factor
-    
-    if coords_ref is None:
-        ind = tree.query_radius(coords, r=r)
-    else:
-        ind = tree.query_radius(coords_ref, r=r)
-    # clean arrays of neighbors from self referencing neighbors
-    # and aggregate at the same time
-    source_nodes = []
-    target_nodes = []
-    for i, arr in enumerate(ind):
-        neigh = arr[arr != i]
-        source_nodes.append([i]*(neigh.size))
-        target_nodes.append(neigh)
-    # flatten arrays of arrays
-    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
-    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
-    # remove duplicate pairs
-    pairs = np.hstack((source_nodes, target_nodes))
-    if coords_ref is None:
-        pairs = remove_duplicate_pairs(pairs)
-    return pairs
+    return build_rdn(coords, r=r, coords_ref=coords_ref, **kwargs)
 
-def hyperdiagonal(coords):
-    """
-    Compute the maximum possible distance from a set of coordinates as the
-    diagonal of the (multidimensional) cube they occupy.
-
-    Parameters
-    ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-
-    Returns
-    -------
-    dist : float
-        Maximum possible distance.
-    """
-    
-    mini = coords.min(axis=0)
-    maxi = coords.max(axis=0)
-    dist = (maxi - mini)**2
-    dist = np.sqrt(dist.sum())
-    return dist
 
 def find_neighbors(masks, i, r=1):
     """
@@ -595,99 +697,125 @@ def find_neighbors(masks, i, r=1):
     # discard the background value
     return neighbors[neighbors != 0]
 
-def build_contacting(masks, r=1):
+
+def build_contacting(
+    masks: np.ndarray,
+    r: int = 1,
+) -> csr_matrix:
     """
-    Build a network from segmented regions that contact each other or are 
-    within a given distance from each other.
+    Build a CSR adjacency matrix from segmented regions that contact each other
+    or are within a given distance from each other.
+
+    Uses vectorized pixel-shift comparisons over the disk footprint instead of
+    per-label dilation, avoiding Python loops over labels entirely.
 
     Parameters
     ----------
-    masks : array_like
-        2D array of integers defining the identity of masks
-        0 is background (no object detected)
-    r : int
-        Radius of search.
+    masks : np.ndarray
+        2D array of integers defining the identity of masks.
+        0 is background (no object detected).
+    r : int, optional
+        Radius of search. The default is 1.
 
     Returns
     -------
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row, 
-        values correspond to values in masks, which are different from index
-        values of nodes
+    scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix of shape (n_labels, n_labels),
+        where node indices are contiguous and follow the sorted order of
+        unique mask labels, matching the row order of `mask_val_coord`.
 
+    Examples
+    --------
+    >>> A = build_contacting(masks, r=1)
+    >>> coords = mask_val_coord(masks)  # row i aligns with node i in A
     """
-    source_nodes = []
-    target_nodes = []
-    for i in range(1, masks.max()+1):
-        neigh = find_neighbors(masks, i, r=r)
-        source_nodes.append([i]*(neigh.size))
-        target_nodes.append(neigh)
-    # flatten arrays of arrays
-    source_nodes = np.fromiter(itertools.chain.from_iterable(source_nodes), int).reshape(-1,1)
-    target_nodes = np.fromiter(itertools.chain.from_iterable(target_nodes), int).reshape(-1,1)
-    # remove duplicate pairs
-    pairs = np.hstack((source_nodes, target_nodes))
-    pairs = remove_duplicate_pairs(pairs)
-    return pairs
+    unique_labels = np.unique(masks)
+    unique_labels = unique_labels[unique_labels > 0]  # exclude background
+    n_labels = len(unique_labels)
+    if n_labels == 0:
+        return csr_matrix((0, 0), dtype=np.int8)
 
-def mask_val_coord(masks):
+    # Lookup table: mask label -> contiguous 0-based index
+    label_to_idx = np.zeros(masks.max() + 1, dtype=int)
+    label_to_idx[unique_labels] = np.arange(n_labels)
+
+    footprint = morphology.disk(r)
+    offsets = np.argwhere(footprint) - r
+
+    src_list = []
+    tgt_list = []
+    for dy, dx in offsets:
+        # Only scan the positive half-plane to avoid duplicate edges
+        if dy < 0 or (dy == 0 and dx <= 0):
+            continue
+        # Array views for the original and shifted positions
+        sy_o = slice(max(0, -dy), masks.shape[0] - max(0, dy))
+        sx_o = slice(max(0, -dx), masks.shape[1] - max(0, dx))
+        sy_s = slice(max(0, dy), masks.shape[0] - max(0, -dy))
+        sx_s = slice(max(0, dx), masks.shape[1] - max(0, -dx))
+
+        m_o = masks[sy_o, sx_o]
+        m_s = masks[sy_s, sx_s]
+
+        contact = (m_o != m_s) & (m_o > 0) & (m_s > 0)
+        if contact.any():
+            src_list.append(m_o[contact])
+            tgt_list.append(m_s[contact])
+
+    if not src_list:
+        return csr_matrix((n_labels, n_labels), dtype=np.int8)
+
+    # Remap mask labels to contiguous 0-based indices
+    src = label_to_idx[np.concatenate(src_list)]
+    tgt = label_to_idx[np.concatenate(tgt_list)]
+    data = np.ones(len(src), dtype=np.int8)
+    A = csr_matrix((data, (src, tgt)), shape=(n_labels, n_labels))
+    A = A.maximum(A.T)
+    A.data[:] = 1  # collapse duplicate pixel contacts to binary adjacency
+    return A.astype(np.int8)
+
+
+def mask_val_coord(
+    masks: np.ndarray,
+    as_array: bool = True,
+) -> np.ndarray:
     """
-    Compute the mapping between mask regions and their centroid coordinates.
+    Compute centroid coordinates of all labeled regions in a mask image.
+
+    Rows are returned in the sorted order of unique mask labels, matching
+    the contiguous 0-based node indexing used by `build_contacting`.
 
     Parameters
     ----------
-    masks : array_like
-        2D array of integers defining the identity of masks
-        0 is background (no object detected)
+    masks : np.ndarray
+        2D (or 3D) array of integers defining the identity of masks.
+        0 is background (no object detected).
+    as_array : bool, optional
+        If True (default), return a numpy array with columns ordered (x, y)
+        or (x, y, z). If False, return a DataFrame indexed by mask label.
 
     Returns
     -------
-    coords : dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
+    np.ndarray or pd.DataFrame
+        Centroid coordinates. As an array, shape is (n_labels, n_dims).
     """
-    
-    coords = measure.regionprops_table(masks, properties=('label', 'centroid'))
-    coords = pd.DataFrame.from_dict(coords)
+    props = measure.regionprops_table(masks, properties=('label', 'centroid'))
+    coords = pd.DataFrame.from_dict(props)
     if coords.shape[1] == 3:
-        coords.rename(columns={'centroid-1':'x',  'centroid-0':'y'}, inplace=True)
+        coords.rename(columns={'centroid-1': 'x', 'centroid-0': 'y'}, inplace=True)
     elif coords.shape[1] == 4:
-        coords.rename(columns={'centroid-2':'x', 'centroid-1':'y', 'centroid-0':'z'}, 
+        coords.rename(columns={'centroid-2': 'x', 'centroid-1': 'y', 'centroid-0': 'z'},
                       inplace=True)
     else:
         print('More than 3 detected spatial dimensions, check output column names.')
     coords.index = coords['label']
     coords.drop(columns='label', inplace=True)
+    if as_array:
+        dim_cols = [c for c in ('x', 'y', 'z') if c in coords.columns]
+        # regionprops_table returns labels in sorted order, so the output
+        # rows are in the same contiguous 0-based order used by build_contacting.
+        return coords.loc[:, dim_cols].values
     return coords
-
-def refactor_coords_pairs(coords, pairs):
-    """
-    Transforms coordinates and pairs of nodes data from segmented areas into
-    the formats used by the other functions for network analysis and visualization.
-
-    Parameters
-    ----------
-    coords : dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row, 
-        values correspond to values in masks, which are different from index
-        values of nodes
-
-    Returns
-    -------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row.
-    """
-    
-    mapper = dict(zip(coords.index, np.arange(coords.shape[0])))
-    pairs = pd.DataFrame({'source': pairs[:,0], 'target': pairs[:,1]})
-    pairs['source'] = pairs['source'].map(mapper)
-    pairs['target'] = pairs['target'].map(mapper)
-    coords = coords.loc[:, ['x', 'y']].values
-    pairs = pairs.loc[:, ['source', 'target']].values
-    return coords, pairs
 
 def link_solitaries(
     coords, 
@@ -1185,62 +1313,65 @@ def rescale(data, perc_mini=1, perc_maxi=99,
     else:
         return data_out
 
-def plot_network(coords, pairs, disp_id=False, labels=None,
-                 color_mapper=None, show_legend=True, legend_opt=None,
-                 col_nodes=None, cmap_nodes=None, marker=None,
-                 size_nodes=None, col_edges='k', alpha_edges=0.5, 
-                 linewidth=None, skip_edges=False,
-                 ax=None, figsize=(15, 15), aspect='equal', **kwargs):
+def plot_network(
+    coords: np.ndarray,
+    A: csr_matrix,
+    disp_id: bool = False,
+    labels=None,
+    color_mapper=None, show_legend=True, legend_opt=None,
+    col_nodes=None, cmap_nodes=None, marker=None,
+    size_nodes=None, col_edges='k', alpha_edges=0.5,
+    linewidth=None, skip_edges=False,
+    ax=None, figsize=(15, 15), aspect='equal', **kwargs,
+):
     """
     Plot a network.
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
-    skip_edges : bool
-        If True, edges are not displayed.
-    disp_id: bool
-        If True nodes' indices are displayed.
-    labels: panda series
-        The nodes' labels from which they are colored.
-    show_legend : bool
-        If True, a legend is displayed.
-    legend_opt : dict or None
-        Optional parameters for the legend
-        like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
-    color_mapper: dict
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    disp_id : bool, optional
+        If True, nodes' indices are displayed. The default is False.
+    labels : array-like or pd.Series, optional
+        Node labels from which they are colored.
+    color_mapper : dict, optional
         Maps each label to its color. Computed if not provided.
-    figsize : (float, float), default: :rc:`figure.figsize`
-        Width, height in inches. The default is (15, 15).
-    col_nodes : str of matplotlib compatible color, optional
+    show_legend : bool, optional
+        If True, a legend is displayed. The default is True.
+    legend_opt : dict or None, optional
+        Optional parameters for the legend.
+    col_nodes : str, optional
         Color of nodes. The default is None.
-    cmap_nodes: list
+    cmap_nodes : list, optional
         List of hexadecimal colors for nodes attributes.
     marker : str, optional
         Marker used to display nodes. The default is None.
     size_nodes : int, optional
         Size of nodes. The default is None.
-    col_edges : str or matplotlib compatible color, optional
+    col_edges : str, optional
         Color of edges. The default is 'k'.
     alpha_edges : float, optional
-        Tansparency of edges. The default is 0.5.
+        Transparency of edges. The default is 0.5.
     linewidth : float, optional
         Width of edges. The default is None.
-    ax : matplotlib ax object, optional
+    skip_edges : bool, optional
+        If True, edges are not displayed. The default is False.
+    ax : matplotlib Axes, optional
         If provided, the plot is displayed in ax. The default is None.
     aspect : str, optional
-        Control aspect ration of the figure. The default is 'equal'.
+        Control aspect ratio of the figure. The default is 'equal'.
     **kwargs : dict
         Optional parameters to display nodes.
 
     Returns
     -------
-    None or (fig, ax) if not provided in parameters.
+    None or (fig, ax) if ax was not provided.
     """
-    
+    from matplotlib.collections import LineCollection
+
     if ax is None:
         ax_none = True
         fig, ax = plt.subplots(figsize=figsize)
@@ -1254,17 +1385,15 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
             uniq = labels.unique()
         else:
             uniq = np.unique(np.array(labels))
-        # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
-                cmap_nodes = sns.color_palette('muted').as_hex() 
-            # make a dictionnary attribute:color, with cycling over cmap
+                cmap_nodes = sns.color_palette('muted').as_hex()
             n_colors = len(cmap_nodes)
             color_mapper = {x: cmap_nodes[i % n_colors] for i, x in enumerate(uniq)}
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
-            ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
+            ax.scatter(coords[select, 0], coords[select, 1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
         if show_legend:
             if legend_opt is None:
@@ -1272,79 +1401,91 @@ def plot_network(coords, pairs, disp_id=False, labels=None,
             else:
                 ax.legend(**legend_opt)
     else:
-        ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+        ax.scatter(coords[:, 0], coords[:, 1], c=col_nodes, cmap=cmap_nodes,
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
-    # plot edges
+    # plot edges using LineCollection
     if not skip_edges:
-        for pair in pairs[:,:]:
-            [x0, y0], [x1, y1] = coords[pair]
-            ax.plot([x0, x1], [y0, y1], c=col_edges, zorder=5, alpha=alpha_edges, linewidth=linewidth)
+        rows, cols = A.nonzero()
+        mask = rows < cols  # upper triangle only for undirected edges
+        rows, cols = rows[mask], cols[mask]
+        segments = np.stack([coords[rows, :2], coords[cols, :2]], axis=1)
+        lc = LineCollection(
+            segments,
+            colors=col_edges,
+            alpha=alpha_edges,
+            linewidths=linewidth,
+            zorder=5,
+        )
+        ax.add_collection(lc)
+        ax.autoscale_view()
     if disp_id:
-        offset=0.02
-        for i, (x,y) in enumerate(coords):
-            plt.text(x-offset, y-offset, str(i), zorder=15)
+        offset = 0.02
+        for i, (x, y) in enumerate(coords):
+            ax.text(x - offset, y - offset, str(i), zorder=15)
     if aspect is not None:
         ax.set_aspect(aspect)
     if ax_none:
         return fig, ax
 
-def plot_network_distances(coords, pairs, distances, labels=None,
-                           color_mapper=None, legend=True, legend_opt=None,
-                           col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None, 
-                           cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
-                           figsize=(15, 15), ax=None, aspect='equal', **kwargs):
+def plot_network_distances(
+    coords: np.ndarray,
+    D: csr_matrix,
+    labels=None,
+    color_mapper=None, show_legend=True, legend_opt=None,
+    col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None,
+    cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
+    figsize=(15, 15), ax=None, aspect='equal', **kwargs,
+):
     """
     Plot a network with edges colored by their length.
 
     Parameters
     ----------
-    coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
-    distances : array
-        Distances between each pair of neighbors.
-    labels: panda series
-        The nodes' labels from which they are colored.
-    legend_opt : dict or None
-        Optional parameters for the legend
-        like {'loc': 'upper right', 'bbox_to_anchor': (0.5, 0.5)}
-    color_mapper: dict
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    D : scipy.sparse.csr_matrix
+        CSR matrix of edge distances as returned by `distance_neighbors_csr`.
+    labels : array-like or pd.Series, optional
+        Node labels from which they are colored.
+    color_mapper : dict, optional
         Maps each label to its color. Computed if not provided.
-    col_nodes : str of matplotlib compatible color, optional
+    show_legend : bool, optional
+        If True, a legend is displayed. The default is True.
+    legend_opt : dict or None, optional
+        Optional parameters for the legend.
+    col_nodes : str, optional
         Color of nodes. The default is None.
-    cmap_nodes: list
+    cmap_nodes : list, optional
         List of hexadecimal colors for nodes attributes.
     marker : str, optional
         Marker used to display nodes. The default is None.
     size_nodes : float, optional
         Size of nodes. The default is None.
-    cmap_edges : str of matplotlib.colormap, optional
+    cmap_edges : str, optional
         Colormap of edges. The default is 'viridis'.
     alpha_edges : float, optional
-        Tansparency of edges. The default is 0.7.
+        Transparency of edges. The default is 0.7.
     linewidth : float, optional
         Width of edges. The default is None.
-    figsize : (float, float), default: :rc:`figure.figsize`
+    figsize : (float, float), optional
         Width, height in inches. The default is (15, 15).
-    ax : matplotlib ax object, optional
+    ax : matplotlib Axes, optional
         If provided, the plot is displayed in ax. The default is None.
     aspect : str, optional
-        Proportions of the figure. The default is None.
-    **kwargs : TYPE
-        labels of nodes.
+        Proportions of the figure. The default is 'equal'.
 
     Returns
     -------
-    None or (fig, ax) if not provided in parameters.
-
+    None or (fig, ax) if ax was not provided.
     """
-    
+    from matplotlib.collections import LineCollection
+
     if ax is None:
         ax_none = True
         fig, ax = plt.subplots(figsize=figsize)
     else:
         ax_none = False
+        fig = ax.get_figure()
     # plot nodes
     if labels is not None:
         if isinstance(labels, np.ndarray):
@@ -1353,39 +1494,47 @@ def plot_network_distances(coords, pairs, distances, labels=None,
             uniq = labels.unique()
         else:
             uniq = np.unique(np.array(labels))
-        # color nodes with manual colors
         if color_mapper is None:
             if cmap_nodes is None:
-                cmap_nodes = sns.color_palette('muted').as_hex() 
-            # make a dictionnary attribute:color, with cycling over cmap
+                cmap_nodes = sns.color_palette('muted').as_hex()
             n_colors = len(cmap_nodes)
             color_mapper = {x: cmap_nodes[i % n_colors] for i, x in enumerate(uniq)}
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
-            ax.scatter(coords[select,0], coords[select,1], c=color, label=label,
+            ax.scatter(coords[select, 0], coords[select, 1], c=color, label=label,
                        marker=marker, s=size_nodes, zorder=10, **kwargs)
-        if legend:
+        if show_legend:
             if legend_opt is None:
                 ax.legend()
             else:
                 ax.legend(**legend_opt)
     else:
-        ax.scatter(coords[:,0], coords[:,1], c=col_nodes, cmap=cmap_nodes, 
+        ax.scatter(coords[:, 0], coords[:, 1], c=col_nodes, cmap=cmap_nodes,
                    marker=marker, s=size_nodes, zorder=10, **kwargs)
     # plot edges
-    scaled_dist, min_dist, max_dist = rescale(distances, return_extrema=True)
-    cmap = mpl.cm.viridis
-    norm = mpl.colors.Normalize(vmin=min_dist, vmax=max_dist)
-    for pair, dist in zip(pairs[:,:], scaled_dist):
-        [x0, y0], [x1, y1] = coords[pair]
-        ax.plot([x0, x1], [y0, y1], c=cmap(dist), zorder=0, alpha=alpha_edges, linewidth=linewidth)
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
-                 orientation='vertical', label='Distance')
-    # TODO: plot many lines more efficiently check
-    # from https://stackoverflow.com/a/50029441
-    # https://matplotlib.org/gallery/shapes_and_collections/line_collection.html#sphx-glr-gallery-shapes-and-collections-line-collection-py
-    
+    rows, cols = D.nonzero()
+    # keep only upper triangle to draw each undirected edge once
+    mask = rows < cols
+    rows, cols = rows[mask], cols[mask]
+    distances = np.array(D[rows, cols]).ravel()
+
+    segments = np.stack([coords[rows, :2], coords[cols, :2]], axis=1)
+    cmap = mpl.cm.get_cmap(cmap_edges)
+    norm = mpl.colors.Normalize(vmin=distances.min(), vmax=distances.max())
+    lc = LineCollection(
+        segments,
+        cmap=cmap,
+        norm=norm,
+        alpha=alpha_edges,
+        linewidths=linewidth,
+        zorder=0,
+    )
+    lc.set_array(distances)
+    ax.add_collection(lc)
+    ax.autoscale_view()
+    fig.colorbar(lc, ax=ax, orientation='vertical', label='Distance')
+
     if aspect is not None:
         ax.set_aspect(aspect)
     if ax_none:
@@ -1564,74 +1713,62 @@ def score_method(pairs_true, pairs_test):
     return true_pos_rate, false_pos_rate, false_neg_rate
 
 
-
-def to_NetworkX(nodes, edges, attributes=None):
+def to_NetworkX(
+    A: csr_matrix,
+    attributes: pd.DataFrame = None,
+):
     """
-    Convert tysserand network representation to a NetworkX network object
+    Convert a CSR adjacency matrix to a NetworkX graph.
 
     Parameters
     ----------
-    nodes : ndarray or dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    edges : ndarray or dataframe
-        The pairs of nodes given by their indices.
-    attributes : dataframe
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    attributes : pd.DataFrame, optional
         Attributes of nodes to be added in NetworkX. Default is None.
 
     Returns
     -------
-    G : NetworkX object
+    networkx.Graph
         The converted network.
     """
-    
     import networkx as nx
-    # convert to dataframe if numpy array
-    if isinstance(nodes, np.ndarray):
-        nodes = coords_to_df(nodes)
-    if isinstance(edges, np.ndarray):
-        edges = pairs_to_df(edges)
-    
-    G = nx.from_pandas_edgelist(edges)
+    G = nx.from_scipy_sparse_array(A)
     if attributes is not None:
         for col in attributes.columns:
-            # only for glm extension file:
-            # nx.set_node_attributes(G, attributes[col].to_dict(), col.replace('+','AND')) 
             nx.set_node_attributes(G, attributes[col].to_dict(), col)
     return G
 
-def to_iGraph(nodes, edges, attributes=None):
+def to_iGraph(
+    A: csr_matrix,
+    attributes: pd.DataFrame = None,
+    directed: bool = False,
+):
     """
-    Convert tysserand network representation to an iGraph network object
+    Convert a CSR adjacency matrix to an igraph graph.
 
     Parameters
     ----------
-    nodes : ndarray or dataframe
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    edges : ndarray or dataframe
-        The pairs of nodes given by their indices.
-    attributes : dataframe
-        Attributes of nodes to be added in NetworkX. Default is None.
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    attributes : pd.DataFrame, optional
+        Attributes of nodes to be added. Default is None.
+    directed : bool, optional
+        If False (default), build an undirected graph from the upper triangle
+        of A to avoid duplicate edges. If True, build a directed graph using
+        all non-zero entries.
 
     Returns
     -------
-    G : iGraph object
+    igraph.Graph
         The converted network.
     """
-    
     import igraph as ig
-    # convert to dataframe if numpy array
-    if isinstance(nodes, np.ndarray):
-        nodes = coords_to_df(nodes)
-    if isinstance(edges, np.ndarray):
-        edges = pairs_to_df(edges)
-    
-    # initialize empty graph
-    G = ig.Graph()
-    # add all the vertices
-    G.add_vertices(nodes.shape[0])
-    # add all the edges
-    G.add_edges(edges.values)
-    # add attributes
+    from scipy.sparse import triu
+    if directed:
+        G = ig.Graph.Adjacency(A, mode='directed')
+    else:
+        G = ig.Graph.Adjacency(triu(A, format='csr'), mode='upper')
     if attributes is not None:
         for col in attributes.columns:
             att = attributes[col].values
@@ -1641,101 +1778,103 @@ def to_iGraph(nodes, edges, attributes=None):
     return G
 
 def add_to_AnnData(
-    coords, 
-    pairs, 
+    coords: np.ndarray,
+    A: csr_matrix,
+    D: csr_matrix = None,
     adata=None,
     counts=None,
     obs_names=None,
     var_names=None,
-    return_adata=False,
-    network_metadata=None,
-    ):
-    """    
-    Convert tysserand network representation to sparse matrices
-    and add them to an AnnData (Scanpy) object, created if not provided.
+    return_adata: bool = False,
+    network_metadata: dict = None,
+):
+    """
+    Add a CSR network to an AnnData (Scanpy) object, created if not provided.
 
     Parameters
     ----------
-    nodes : ndarray
-        Coordinates of points with columns corresponding to axes ('x', 'y', ...)
-    edges : ndarray
-        The pairs of nodes given by their indices.
-    adata : AnnData object
-        An object dedicated to single-cell data analysis. 
+    coords : np.ndarray
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    D : scipy.sparse.csr_matrix, optional
+        CSR distance matrix. If not provided, computed from `coords` and `A`.
+    adata : AnnData object, optional
         If not provided, it is created and returned.
+    counts : array-like, optional
+        Count matrix for AnnData creation. Ignored if `adata` is provided.
+    obs_names : array-like, optional
+        Observation names. Ignored if `adata` is provided.
+    var_names : array-like, optional
+        Variable names. Ignored if `adata` is provided.
+    return_adata : bool, optional
+        Whether to return the AnnData object. The default is False.
+    network_metadata : dict, optional
+        Metadata stored in `adata.uns['neighbors']`.
+
+    Returns
+    -------
+    AnnData or None
+        The AnnData object if `return_adata` is True or if it was created.
     """
-    
     if adata is None:
         return_adata = True
         import anndata as ad
         if counts is None:
-            # make dummy counts table
             counts = np.empty(shape=(len(coords), 1))
         adata = ad.AnnData(csr_matrix(counts))
-        return_adata = True
         if obs_names is not None:
             adata.obs_names = obs_names
         if var_names is not None:
             adata.var_names = var_names
-    
-    # convert arrays to sparse matrices
-    n_cells = adata.shape[0]
-    connect = np.ones(pairs.shape[0], dtype=np.int8)
-    sparse_connect = csr_matrix((connect, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.int8)
-    distances = distance_neighbors(coords, pairs)
-    sparse_dist = csr_matrix((distances, (pairs[:,0], pairs[:,1])), shape=(n_cells, n_cells), dtype=np.float)
-    
-    # add to AnnData object
+
+    if D is None:
+        D = distance_neighbors_csr(coords, A)
+
     adata.obsm['spatial'] = coords
-    adata.obsp['connectivities'] = sparse_connect
-    adata.obsp['distances'] = sparse_dist
+    adata.obsp['connectivities'] = A
+    adata.obsp['distances'] = D
     if network_metadata is None:
-        network_metadata = {'connectivities_key': 'connectivities', 
-                            'distances_key': 'distances', 
-                            'params': {'method': 'delaunay', 
-                                        'metric': 'euclidean', 
-                                        'edge_trimming': 'percentile 99'}}
+        network_metadata = {'connectivities_key': 'connectivities',
+                            'distances_key': 'distances',
+                            'params': {'method': 'delaunay',
+                                       'metric': 'euclidean',
+                                       'edge_trimming': 'percentile 99'}}
     adata.uns['neighbors'] = network_metadata
     if return_adata:
         return adata
 
 
-def get_from_AnnData(adata, key_edges='spatial_connectivities', is_symmetric=True):
+def get_from_AnnData(
+    adata,
+    key_connectivities: str = 'connectivities',
+    key_distances: str = 'distances',
+):
     """
-    Extract nodes and edges data from an AnnData object.
+    Extract network CSR matrices and coordinates from an AnnData object.
 
-    Parameter
-    ---------
+    Parameters
+    ----------
     adata : AnnData object
         An object dedicated to single-cell data analysis.
-    key_edges : str
-        Key where edges are stored.
-    is_symmetric : bool
-        Whether the network matrix is symmetric.
-    
+    key_connectivities : str, optional
+        Key in `adata.obsp` for the adjacency matrix. The default is 'connectivities'.
+    key_distances : str, optional
+        Key in `adata.obsp` for the distance matrix. The default is 'distances'.
+
     Returns
     -------
-    nodes : dataframe
-        Coordinates of nodes indicated by 'x', 'y' or other if required.
-    edges : ndarray
-        The pairs of nodes given by their indices.
+    coords : np.ndarray
+        Spatial coordinates from `adata.obsm['spatial']`.
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix.
+    D : scipy.sparse.csr_matrix
+        CSR distance matrix.
     """
-
-    nodes = pd.DataFrame(
-        data=adata.X.toarray(),
-        columns=adata.var_names,
-        index=adata.obs_names,
-    )
-    # merge with adata.obs?
-
-    if is_symmetric:
-        from scipy.sparse import triu
-        pairs = np.argwhere(triu(adata.obsp[key_edges] != 0))
-    else:
-        pairs = np.argwhere(adata.obsp[key_edges] != 0)
-    edges = pd.DataFrame(data=pairs, columns=['source', 'target'])
-
-    return nodes, edges
+    coords = adata.obsm['spatial']
+    A = csr_matrix(adata.obsp[key_connectivities])
+    D = csr_matrix(adata.obsp[key_distances])
+    return coords, A, D
 
 
 # --------------------------------------------------------------------
@@ -1783,22 +1922,64 @@ def get_annotation_names(viewer):
     return layer_nodes_name, layer_edges_name
 
 def convert_nodes_tys_to_nap(coords):
+    """
+    Reverse the x, y, z ordering of nodes coordinates to match napari's convention.
+    """
     new_nodes = coords[:, ::-1]
     return new_nodes
 
 def convert_edges_tys_to_nap(coords, pairs):
+    """
+    Make start and end coordinates of edges for napari.
+
+    .. deprecated::
+        Use :func:`csr_to_edge_coords` instead, which accepts a CSR adjacency matrix directly.
+    """
+    import warnings
+    warnings.warn(
+        "convert_edges_tys_to_nap is deprecated; use csr_to_edge_coords(coords, A) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     new_edges = []
     for pair in pairs[:,:]:
         new_edges.append(np.array(coords[pair]))
     return new_edges
 
-def make_annotation_dict(coords, pairs=None,
+def make_annotation_dict(coords, A=None, pairs=None,
                          nodes_class=None,
                          nodes_class_color_mapper=None,
                          ):
     """
-    Create a dictionnary of annotations from tysserand network objects.
+    Create a dictionary of annotations from tysserand network objects.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Node coordinates in tysserand convention (x, y, ...), shape (n_nodes, ndim).
+    A : scipy.sparse.csr_matrix, optional
+        CSR adjacency matrix. Preferred over `pairs`.
+    pairs : np.ndarray, optional
+        Deprecated. Edge list of shape (n_edges, 2). Use `A` instead.
+    nodes_class : array-like, optional
+        Class label per node.
+    nodes_class_color_mapper : dict, optional
+        Maps each class label to a color.
+
+    Returns
+    -------
+    annotations : dict
     """
+    import warnings
+    if pairs is not None:
+        warnings.warn(
+            "The `pairs` argument to make_annotation_dict is deprecated; "
+            "pass A (csr_matrix) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if A is None:
+            A = vectors_to_csr(pairs, n_nodes=len(coords))
 
     annotations = {}
     new_nodes = convert_nodes_tys_to_nap(coords)
@@ -1807,8 +1988,9 @@ def make_annotation_dict(coords, pairs=None,
         annotations['nodes_class'] = nodes_class
     if nodes_class_color_mapper is not None:
         annotations['nodes_class_color_mapper'] = nodes_class_color_mapper
-    if pairs is not None:
-        annotations['edges_coords'] = convert_edges_tys_to_nap(new_nodes, pairs)
+    if A is not None:
+        annotations['edges_coords'] = csr_to_edge_coords(new_nodes, A)
+        annotations['A'] = A
     return annotations
 
 def get_annotation_dict(viewer, layer_nodes_name, layer_edges_name):
@@ -1926,27 +2108,43 @@ def add_annotations(
         add_edges(viewer, annotations, edge_color=edge_color, name=layer_edges_name)
     return
 
-def assign_nodes_to_edges(nodes, edges):
+def assign_nodes_to_edges(nodes, edges, n_nodes=None):
     """
-    Link edges extremities to nodes and compute the matrix
-    of pairs of nodes indices.
-    """
+    Snap edge endpoints to nearest nodes and return a CSR adjacency matrix.
 
+    Parameters
+    ----------
+    nodes : np.ndarray
+        Node coordinates in napari convention, shape (n_nodes, ndim).
+    edges : list of np.ndarray
+        Napari Shapes edge data: list of (2, ndim) arrays, one per edge.
+    n_nodes : int, optional
+        Total number of nodes. If None, ``len(nodes)`` is used. Pass explicitly
+        when isolated nodes are present to ensure the CSR matrix has the correct size.
+
+    Returns
+    -------
+    new_edges : list of np.ndarray
+        Snapped edge coordinates in napari format (same structure as `edges`).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix recovered from the snapped edges.
+    """
     from scipy.spatial import cKDTree
-    
+
+    if n_nodes is None:
+        n_nodes = len(nodes)
+
     edges_arr = np.vstack(edges)
     kdt_nodes = cKDTree(nodes)
 
-    # closest node id and discard computed distances ('_,')
+    # closest node id; discard computed distances
     _, pairs = kdt_nodes.query(x=edges_arr, k=1)
-    # refactor list of successive ids for start and end of edges into 2D array
+    # reshape flat list [src0, tgt0, src1, tgt1, ...] into (n_edges, 2)
     pairs = np.vstack((pairs[::2], pairs[1::2])).T
 
-    new_edges = []
-    for pair in pairs[:,:]:
-        new_edges.append(np.array(nodes[pair]))
-    
-    return new_edges, pairs
+    new_edges = [np.array(nodes[pair]) for pair in pairs]
+    A = vectors_to_csr(pairs, n_nodes=n_nodes)
+    return new_edges, A
 
 def update_edges(
     viewer, 
