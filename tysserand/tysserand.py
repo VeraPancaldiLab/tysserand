@@ -872,76 +872,67 @@ def mask_val_coord(
     return coords
 
 def link_solitaries(
-    coords, 
-    pairs, 
-    method='delaunay', 
-    min_neighbors=3, 
+    coords,
+    A,
+    method='delaunay',
+    min_neighbors=3,
     all_pairs=None,
     all_dist=None,
     verbose=1):
     """
-    Detect nodes that are not connected and link them to other nodes.
-    
+    Detect nodes that are not connected (or under-connected) and link them to
+    other nodes, returning an updated CSR adjacency matrix.
+
     Parameters
     ----------
     coords : ndarray
-        Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices.
-    method : string, optional
-        Method used to connect solitary nodes to their neighbors. Default is 'delaunay'.
-        With 'knn', solitary nodes will be connected to their 'k' nearest neighbors.
-    min_neighbors : int
+        Coordinates of points where each column corresponds to an axis (x, y, ...).
+    A : scipy.sparse.csr_matrix
+        CSR adjacency matrix of the network.
+    method : str, optional
+        Method used to connect solitary nodes to their neighbors. Default is
+        'delaunay'. With 'knn', solitary nodes are connected to their nearest
+        neighbors.
+    min_neighbors : int, optional
         Minimum number of neighbors before linking nodes to additional nodes.
-    all_pairs : ndarray
-        Pre-computed matrix of potential edges to re-link nodes.
-    all_dist : array
-        Pre-computed distances between all potential pairs of nodes.
+    all_pairs : scipy.sparse.csr_matrix, optional
+        Pre-computed adjacency matrix of potential edges to re-link nodes.
+    all_dist : scipy.sparse.csr_matrix, optional
+        Pre-computed CSR matrix of distances between potential pairs of nodes.
     verbose : int, optional
-        Verbosity, if different from 0 some messages are displayed.
-        Default is 1.
+        Verbosity, if different from 0 some messages are displayed. Default is 1.
 
     Returns
     -------
-    pairs : ndarray
-        The (n_pairs x 2) matrix of neighbors indices, with additional edges (rows in array).
-    
+    A : scipy.sparse.csr_matrix
+        Updated CSR adjacency matrix, with additional edges for solitary nodes.
+
     Example
     -------
-    >>> coords = np.array([[0, 0],
-                           [1, 0],
-                           [2, 0],
-                           [3.1, 0],
-                           [4, 0]])
-    >>> pairs = np.array([[0, 1],
-                          [1, 2]])
-    >>> link_solitaries(coords, pairs, method='knn', k=1)
-    array([[0, 1],
-           [1, 2],
-           [3, 4]])
-    >>> link_solitaries(coords, pairs, method='knn', k=2)
-    array([[0, 1],
-           [1, 2],
-           [2, 3],
-           [2, 4],
-           [3, 4]])
+    >>> coords = np.array([[0, 0], [1, 0], [2, 0], [3.1, 0], [4, 0]])
+    >>> A = vectors_to_csr(np.array([[0, 1], [1, 2]]), n_nodes=5)
+    >>> A = link_solitaries(coords, A, method='knn', min_neighbors=1)
     """
-    
-    # detect if some nodes have no edges
     n_nodes = coords.shape[0]
+    pairs = csr_to_edge_pairs(A)
+
+    # detect nodes with no edges
     uniq_nodes = set(range(n_nodes))
-    uniq_pairs = set(np.unique(pairs))
+    uniq_pairs = set(np.unique(pairs).tolist()) if len(pairs) > 0 else set()
     solitaries = uniq_nodes.difference(uniq_pairs)
-    if min_neighbors > 1:
+    if min_neighbors > 1 and len(pairs) > 0:
         # detect nodes with too few edges
         nodes_ids, nodes_counts = np.unique(pairs, return_counts=True)
         nodes_ids = nodes_ids[nodes_counts < min_neighbors]
-        solitaries = solitaries.union(nodes_ids)
+        solitaries = solitaries.union(nodes_ids.tolist())
     n_solitaries = len(solitaries)
-    if min_neighbors == 1 and n_solitaries == 0:
-        print("all nodes have at least one edge")
-    elif min_neighbors > 1 and n_solitaries == 0:
-        print(f"all nodes have at least {min_neighbors} edges")
+
+    if n_solitaries == 0:
+        if verbose != 0:
+            if min_neighbors == 1:
+                print("all nodes have at least one edge")
+            else:
+                print(f"all nodes have at least {min_neighbors} edges")
     else:
         if verbose != 0:
             if min_neighbors == 1:
@@ -949,31 +940,32 @@ def link_solitaries(
             else:
                 print(f"there are {n_solitaries}/{n_nodes} nodes with < {min_neighbors} edges")
 
+        new_pairs = []
         if method == 'delaunay':
             if all_pairs is None:
                 all_pairs = build_delaunay(coords, node_adaptive_trimming=False, trim_dist=False)
             if all_dist is None:
                 all_dist = distance_neighbors(coords, all_pairs)
             for node_id in solitaries:
-                select_src = np.where(all_pairs[:, 0] == node_id)[0]
-                select_trg = np.where(all_pairs[:, 1] == node_id)[0]
-                pairs_ids = np.hstack([select_src, select_trg]) # array of indices, not a boolean vector
-                node_distances = all_dist[pairs_ids]
+                cand = all_pairs.indices[all_pairs.indptr[node_id]:all_pairs.indptr[node_id + 1]]
+                node_distances = all_dist.data[all_dist.indptr[node_id]:all_dist.indptr[node_id + 1]]
                 if len(node_distances) >= min_neighbors:
-                    select_pairs_ids = np.argsort(node_distances)[:min_neighbors]
-                    new_pairs_ids = pairs_ids[select_pairs_ids]
-                    pairs = np.vstack([pairs, all_pairs[new_pairs_ids, :]])
+                    keep = np.argsort(node_distances)[:min_neighbors]
+                    for j in cand[keep]:
+                        new_pairs.append((node_id, int(j)))
         elif method == 'knn':
-            nn_pairs = build_knn(coords, k=min_neighbors)
-            # for each lonely node, add its edges with the knn neighbors
+            nn_A = build_knn(coords, k=min_neighbors)
             for i in solitaries:
-                select = np.logical_or(nn_pairs[:, 0] == i, nn_pairs[:, 1] == i)
-                pairs = np.vstack([pairs, nn_pairs[select, :]])
+                for j in nn_A.indices[nn_A.indptr[i]:nn_A.indptr[i + 1]]:
+                    new_pairs.append((i, int(j)))
 
-        pairs = remove_duplicate_pairs(pairs)
-       
-    return pairs
-    
+        if len(new_pairs) > 0:
+            new_pairs = np.array(new_pairs)
+            pairs = np.vstack([pairs, new_pairs]) if len(pairs) > 0 else new_pairs
+            pairs = remove_duplicate_pairs(pairs)
+
+    return vectors_to_csr(pairs, n_nodes=n_nodes)
+
 def build_contacting_nn(masks, r=1, k=3):
     """
     Build a network from segmented regions as a mix between
