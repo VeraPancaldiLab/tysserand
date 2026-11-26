@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 import os
+from pathlib import Path
 import joblib
 import itertools
 from scipy.spatial import Voronoi
@@ -11,7 +12,7 @@ from sklearn.neighbors import BallTree
 import pynndescent
 from skimage import morphology, feature, measure, segmentation, filters, color
 from scipy import ndimage as ndi
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, save_npz, load_npz
 import cv2 as cv
 import napari
 import dask
@@ -436,6 +437,119 @@ def csr_to_edge_coords(coords: np.ndarray, A: csr_matrix) -> list:
     """
     pairs = csr_to_edge_pairs(A)
     return [coords[pair] for pair in pairs]
+
+
+def save_network(A, path):
+    """
+    Save a CSR adjacency matrix to a sparse ``.npz`` file.
+
+    Parameters
+    ----------
+    A : scipy.sparse matrix
+        Adjacency matrix of the network. Coerced to CSR if needed.
+    path : str or Path
+        Output path. The ``.npz`` extension is added by scipy if absent.
+    """
+    if not isinstance(A, csr_matrix):
+        A = csr_matrix(A)
+    save_npz(str(path), A)
+
+
+def load_network(path):
+    """
+    Load a CSR adjacency matrix saved with :func:`save_network`.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the ``.npz`` file.
+
+    Returns
+    -------
+    A : scipy.sparse.csr_matrix
+        The network's adjacency matrix.
+    """
+    return load_npz(str(path)).tocsr()
+
+
+def attributes_to_matrix(nodes, attributes):
+    """
+    Build the ``(n_nodes, n_attributes)`` matrix ``C`` of node attributes aligned
+    to the adjacency matrix node order (positional index ``0..n-1``). It is used,
+    for instance, for the matrix form of the mixing matrix ``M = C.T @ A @ C``.
+
+    Parameters
+    ----------
+    nodes : pd.DataFrame or array-like
+        Node attributes. If a DataFrame, ``attributes`` selects its columns.
+    attributes : str or list
+        Attribute column(s) to extract.
+
+    Returns
+    -------
+    C : np.ndarray
+        Float matrix of shape ``(n_nodes, n_attributes)``.
+    """
+    if isinstance(attributes, str):
+        attributes = [attributes]
+    if isinstance(nodes, pd.DataFrame):
+        C = nodes.loc[:, list(attributes)].to_numpy(dtype=float)
+    else:
+        C = np.asarray(nodes, dtype=float)
+        if C.ndim == 1:
+            C = C[:, np.newaxis]
+    return C
+
+
+def migrate_edges_to_npz(directory, nodes_dir=None, extension='parquet',
+                         overwrite=False, verbose=1):
+    """
+    One-time migration of edge-list network files to sparse ``.npz`` CSR files.
+
+    Reads each ``edges_{group}.{extension}`` file (first two columns are the
+    ``source``/``target`` node indices), infers the number of nodes from the
+    matching ``nodes_{group}`` file (to keep isolated nodes), converts to a
+    symmetric CSR adjacency matrix with :func:`vectors_to_csr` and writes
+    ``edges_{group}.npz`` next to it.
+
+    Parameters
+    ----------
+    directory : str or Path
+        Directory holding the ``edges_*`` files (and ``nodes_*`` files if
+        ``nodes_dir`` is not given).
+    nodes_dir : str or Path, optional
+        Directory holding the ``nodes_*`` files, if different from ``directory``.
+    extension : str, optional
+        Extension of the existing edge-list files, ``'parquet'`` (default) or ``'csv'``.
+    overwrite : bool, optional
+        If False (default), skip groups whose ``.npz`` file already exists.
+    verbose : int, optional
+        Verbosity level.
+    """
+    directory = Path(directory)
+    nodes_dir = directory if nodes_dir is None else Path(nodes_dir)
+    if extension == 'parquet':
+        read_fct = pd.read_parquet
+    elif extension == 'csv':
+        read_fct = pd.read_csv
+    else:
+        raise ValueError(f"Unsupported extension: {extension}")
+
+    for edges_path in sorted(directory.glob(f'edges_*.{extension}')):
+        group = edges_path.stem[len('edges_'):]
+        out_path = directory / f'edges_{group}.npz'
+        if out_path.exists() and not overwrite:
+            continue
+        pairs = read_fct(edges_path).iloc[:, :2].to_numpy().astype(int)
+        # infer n_nodes from the matching nodes file to preserve isolated nodes
+        n_nodes = None
+        nodes_path = nodes_dir / f'nodes_{group}.{extension}'
+        if nodes_path.exists():
+            n_nodes = len(read_fct(nodes_path))
+        A = vectors_to_csr(pairs, n_nodes=n_nodes)
+        save_network(A, out_path)
+        if verbose > 0:
+            print(f"migrated {edges_path.name} -> {out_path.name}")
 
 
 def build_delaunay(
