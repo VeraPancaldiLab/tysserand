@@ -4,7 +4,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from tysserand import tysserand as ty
+import tysserand as ty
 from tysserand import contacting
 
 

@@ -12,7 +12,8 @@ All public functions are available from the package namespace::
     import tysserand as ty
     A = ty.build_delaunay(coords)
 
-``from tysserand import tysserand as ty`` keeps working for older code.
+``from tysserand import tysserand as ty`` still works but is deprecated
+(``FutureWarning``) and will be removed in a future release.
 
 Submodules:
 

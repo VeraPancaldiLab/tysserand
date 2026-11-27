@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import tysserand
-from tysserand import tysserand as ty
+import tysserand as ty
 
 HEAVY = ["napari", "cv2", "dask", "skimage", "sklearn", "pynndescent", "numba",
          "matplotlib", "seaborn", "anndata", "networkx", "igraph"]
@@ -16,7 +16,7 @@ HEAVY = ["napari", "cv2", "dask", "skimage", "sklearn", "pynndescent", "numba",
 def test_import_is_light():
     """Importing tysserand must not load heavy libraries: they are paid again
     by every parallel worker process."""
-    code = ("import sys, tysserand; from tysserand import tysserand; "
+    code = ("import sys, tysserand; "
             f"print([m for m in {HEAVY!r} if m in sys.modules])")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True,
                          text=True, check=True).stdout.strip()
@@ -28,12 +28,33 @@ def public_functions(module):
             if inspect.isfunction(o) and not n.startswith("_")}
 
 
+def legacy_module():
+    # force a fresh import so that the warning is emitted again
+    sys.modules.pop("tysserand.tysserand", None)
+    if "tysserand" in vars(tysserand):
+        delattr(tysserand, "tysserand")
+    with pytest.warns(FutureWarning, match="import tysserand as ty"):
+        from tysserand import tysserand as legacy
+    return legacy
+
+
+def test_legacy_module_is_deprecated_and_light():
+    legacy_module()
+    code = ("import sys, warnings; warnings.simplefilter('ignore', FutureWarning); "
+            "from tysserand import tysserand; "
+            f"print([m for m in {HEAVY!r} if m in sys.modules])")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                         text=True, check=True).stdout.strip()
+    assert out == "[]", f"heavy modules loaded at import: {out}"
+
+
 def test_same_api_in_package_and_legacy_module():
-    assert public_functions(tysserand) == public_functions(ty)
+    legacy = legacy_module()
+    assert public_functions(tysserand) == public_functions(legacy)
     for name in ["build_delaunay", "build_knn", "build_contacting", "vectors_to_csr",
                  "save_network", "load_network", "attributes_to_matrix", "plot_network",
                  "to_iGraph", "add_to_AnnData", "visualize"]:
-        assert getattr(ty, name) is getattr(tysserand, name)
+        assert getattr(legacy, name) is getattr(tysserand, name)
 
 
 def test_add_to_anndata_computes_distances():
