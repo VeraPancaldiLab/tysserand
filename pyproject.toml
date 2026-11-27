@@ -19,7 +19,7 @@ scikit-image = "*"
 numpy = "*"
 hdbscan = "*"
 umap-learn = "*"
-dask = {extras = ["complete"], version = "*"}
+joblib = "*"
 opencv-python-headless = "*"
 napari = {extras = ["all"], version = "*"}
 

@@ -29,7 +29,7 @@ Each node is linked to nodes closer than a threshold distance D, that is to say 
 ### Area contact
 
 Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.  
-A parallelized version is implemented with the Dask library.
+A parallelized version is implemented with joblib.
 
 ### Area contact *and* k-nearest neighbors
 

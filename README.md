@@ -76,7 +76,7 @@ Each node is linked to nodes closer than a threshold distance D, that is to say 
 ### Area contact
 
 Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.  
-A parallelized version is implemented with the Dask library.
+A parallelized version is implemented with joblib.
 
 ![*Contacting areas* reconstruction](./images/publication_figures/simulated_segmentation_image_size-600_hole_proba-0.1_noise_sigma-10.0_objects_network.png)
 

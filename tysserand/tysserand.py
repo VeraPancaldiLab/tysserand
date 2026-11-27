@@ -15,8 +15,6 @@ from scipy import ndimage as ndi
 from scipy.sparse import csr_matrix, save_npz, load_npz
 import cv2 as cv
 import napari
-import dask
-from dask.distributed import Client, LocalCluster
 
 def make_simple_coords():
     """
@@ -899,14 +897,17 @@ def build_contacting(
     """
     unique_labels = np.unique(masks)
     unique_labels = unique_labels[unique_labels > 0]  # exclude background
-    n_labels = len(unique_labels)
-    if n_labels == 0:
-        return csr_matrix((0, 0), dtype=np.int8)
+    src, tgt = _contacting_label_pairs(masks, r=r)
+    return _label_pairs_to_csr(src, tgt, unique_labels)
 
-    # Lookup table: mask label -> contiguous 0-based index
-    label_to_idx = np.zeros(masks.max() + 1, dtype=int)
-    label_to_idx[unique_labels] = np.arange(n_labels)
 
+def _contacting_label_pairs(masks, r=1):
+    """
+    Mask labels of contacting pixel pairs, within a radius `r`.
+
+    Returns two 1D arrays `src, tgt` of mask labels (not node indices), one
+    entry per contacting pixel pair (duplicates included).
+    """
     footprint = morphology.disk(r)
     offsets = np.argwhere(footprint) - r
 
@@ -931,16 +932,33 @@ def build_contacting(
             tgt_list.append(m_s[contact])
 
     if not src_list:
+        empty = np.empty(0, dtype=masks.dtype)
+        return empty, empty
+    return np.concatenate(src_list), np.concatenate(tgt_list)
+
+
+def _label_pairs_to_csr(src, tgt, unique_labels):
+    """
+    Binary symmetric CSR adjacency from pairs of mask labels, with node indices
+    following the sorted order of `unique_labels` (background excluded).
+    """
+    n_labels = len(unique_labels)
+    if n_labels == 0:
+        return csr_matrix((0, 0), dtype=np.int8)
+    if len(src) == 0:
         return csr_matrix((n_labels, n_labels), dtype=np.int8)
 
     # Remap mask labels to contiguous 0-based indices
-    src = label_to_idx[np.concatenate(src_list)]
-    tgt = label_to_idx[np.concatenate(tgt_list)]
-    data = np.ones(len(src), dtype=np.int8)
-    A = csr_matrix((data, (src, tgt)), shape=(n_labels, n_labels))
-    A = A.maximum(A.T)
-    A.data[:] = 1  # collapse duplicate pixel contacts to binary adjacency
-    return A.astype(np.int8)
+    src = np.searchsorted(unique_labels, src)
+    tgt = np.searchsorted(unique_labels, tgt)
+    # Deduplicate the many pixel contacts per pair of objects *before* building
+    # the matrix: summing int8 duplicates overflows (e.g. 459 contacts wrap to a
+    # negative value) and used to silently drop edges.
+    lo = np.minimum(src, tgt).astype(np.int64)
+    hi = np.maximum(src, tgt).astype(np.int64)
+    codes = np.unique(lo * n_labels + hi)
+    pairs = np.column_stack([codes // n_labels, codes % n_labels])
+    return vectors_to_csr(pairs, n_nodes=n_labels, out_dtype=np.int8)
 
 
 def mask_val_coord(
@@ -1102,20 +1120,15 @@ def build_contacting_nn(masks, r=1, k=3):
     -------
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...)
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row,
-        values correspond to values in masks, which are different from index
-        values of nodes
+    A : scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix, nodes follow the sorted order of
+        unique mask labels (rows of `coords`). Nodes with less than `k`
+        contacting neighbors are linked to their `k` nearest neighbors.
     """
-   
-    pairs = build_contacting(masks, r=r)
-    # reencode the coordinates to match node positions with their respective areas
+    A = build_contacting(masks, r=r)
     coords = mask_val_coord(masks)
-    coords, pairs = refactor_coords_pairs(coords, pairs)
-   
-    pairs = link_solitaries(coords, pairs)
-       
-    return coords, pairs
+    A = link_solitaries(coords, A, method='knn', min_neighbors=k, verbose=0)
+    return coords, A
 
 # ------ Parallelized version of build_contacting ------
 
@@ -1273,14 +1286,17 @@ def make_tiles_limits(im, n_splits, margin=0):
     [[0, 4, 0, 8], [0, 4, 8, 16], [4, 8, 0, 8], [4, 8, 8, 16]]
     >>> make_tiles_limits(im, 4, margin=1)
     [[0, 5, 0, 9], [0, 5, 7, 16], [3, 8, 0, 9], [3, 8, 7, 16]]
+    >>> make_tiles_limits(im, 1)
+    [[0, 8, 0, 16]]
     """
     
-    if n_splits == 1:
-        return [0, im.shape[1], 0, im.shape[0]]
-    # number of splits per axis
-    ax_splits = int(np.log2(n_splits))
-    x_segments = split_range(im.shape[1], ax_splits)
-    y_segments = split_range(im.shape[0], ax_splits)
+    if n_splits <= 1:
+        return [[0, im.shape[1], 0, im.shape[0]]]
+    # number of splits per axis, with nx * ny == n_splits for powers of 2
+    nx = 2 ** int(np.ceil(np.log2(n_splits) / 2))
+    ny = max(1, n_splits // nx)
+    x_segments = split_range(im.shape[1], nx)
+    y_segments = split_range(im.shape[0], ny)
     
     if margin > 0:
         x_segments = extend_indices(x_segments, margin=margin)
@@ -1315,14 +1331,15 @@ def extract_tile(im, limits):
     -------
     >>> im = np.arange(8 * 8).reshape(8, 8)
     >>> tiles_indices = make_tiles_limits(im, 4, margin=0)
-    >>> extract_tiles(im, tiles_indices[-1])
+    >>> extract_tile(im, tiles_indices[-1])
     array([[36, 37, 38, 39],
            [44, 45, 46, 47],
            [52, 53, 54, 55],
            [60, 61, 62, 63]])
     """
     
-    tile = im[limits[0]: limits[1], limits[2]: limits[3]]
+    # limits are [xmin, xmax, ymin, ymax], x being columns and y rows
+    tile = im[limits[2]: limits[3], limits[0]: limits[1]]
     return tile
 
 def merge_pairs(lpairs):
@@ -1352,14 +1369,26 @@ def merge_pairs(lpairs):
     pairs = np.unique(np.vstack(lpairs), axis=0)
     return pairs
 
-def build_contacting_parallel(im, r=1, split_method='im_size', min_tile_size=360000):
+def build_contacting_parallel(
+    im: np.ndarray,
+    r: int = 1,
+    split_method: str = 'im_size',
+    min_tile_size: int = 360000,
+    n_jobs: int = -1,
+    backend: str = 'loky',
+) -> csr_matrix:
     """
-    Build a network from segmented regions that contact each other or are 
-    within a given distance from each other.
+    Build a CSR adjacency matrix from segmented regions that contact each other
+    or are within a given distance from each other, processing tiles of the
+    image in parallel with joblib.
+
+    The image is split into overlapping tiles (margin `r`) so that contacts
+    across tile borders are detected, and the output is identical to
+    `build_contacting`.
 
     Parameters
     ----------
-    im : array_like
+    im : np.ndarray
         2D array of integers defining the identity of masks
         0 is background (no object detected)
     r : int
@@ -1370,56 +1399,44 @@ def build_contacting_parallel(im, r=1, split_method='im_size', min_tile_size=360
     min_tile_size : int
         Minimum number of bytes of tiles.
         The default is 360000.
+    n_jobs : int, optional
+        Number of joblib workers, -1 uses all CPUs. The default is -1.
+    backend : str, optional
+        joblib backend, 'loky' (processes) or 'threading'. The default is 'loky'.
 
     Returns
     -------
-    pairs : ndarray
-        Pairs of neighbors given by the first and second element of each row, 
-        values correspond to values in masks, which are different from index
-        values of nodes
-        
+    scipy.sparse.csr_matrix
+        Symmetric CSR adjacency matrix of shape (n_labels, n_labels),
+        where node indices are contiguous and follow the sorted order of
+        unique mask labels, matching the row order of `mask_val_coord`.
+
     Example
     -------
-    >>> # generate the tissue image
     >>> coords, masks = ty.make_random_tiles(sx=600, sy=600, nb=12, noise_sigma=10.0)
-    >>> # erase some segmented objects
-    >>> if hole_proba != 0:
-    >>>     for i in np.unique(masks):
-    >>>         if np.random.rand() > (1 - hole_proba):
-    >>>             masks[masks == i] = 0
-    >>> 
-    >>> # ------ Contacting areas method ------
-    >>> pairs = ty.build_contacting(masks)
-    >>> coords = ty.mask_val_coord(masks)
-    >>> coords, pairs_true = ty.refactor_coords_pairs(coords, pairs)
-    >>> 
-    >>> # ------ Parallel version ------
-    >>> paral_pairs = build_contacting_parallel(im)
-    >>> # check that detected edges are identical
-    >>> pairs = np.sort(pairs, axis=1)
-    >>> paral_pairs = np.sort(paral_pairs, axis=1)
-    >>> print(np.all(paral_pairs == pairs))
+    >>> A = ty.build_contacting(masks)
+    >>> A_paral = ty.build_contacting_parallel(masks)
+    >>> (A != A_paral).nnz == 0
+    True
     """
-    
+    unique_labels = np.unique(im)
+    unique_labels = unique_labels[unique_labels > 0]  # exclude background
+
     n_splits = choose_optimal_image_split(im, method=split_method, min_tile_size=min_tile_size)
-    segments = make_tiles_limits(im, n_splits, margin=r)
-    
-    cluster = LocalCluster(
-        n_workers=16,
-        threads_per_worker=1,
-    )
-    client = Client(cluster)
-    
-    # list of pairs computed for each tile
-    lpairs = []
-    for limits in segments:
-        tile = dask.delayed(extract_tile)(im, limits)
-        pairs = dask.delayed(build_contacting)(tile, r=r)
-        lpairs.append(pairs)
-    # merge all pairs
-    pairs = dask.delayed(merge_pairs)(lpairs)
-    pairs = pairs.compute()
-    return pairs
+    tiles_limits = make_tiles_limits(im, n_splits, margin=r)
+
+    if len(tiles_limits) == 1:
+        lpairs = [_contacting_label_pairs(im, r=r)]
+    else:
+        n_jobs = min(len(tiles_limits), joblib.cpu_count() if n_jobs == -1 else n_jobs)
+        lpairs = joblib.Parallel(n_jobs=n_jobs, backend=backend)(
+            joblib.delayed(_contacting_label_pairs)(extract_tile(im, limits), r=r)
+            for limits in tiles_limits
+        )
+    # pairs are mask labels, hence global across tiles: merge them directly
+    src = np.concatenate([p[0] for p in lpairs])
+    tgt = np.concatenate([p[1] for p in lpairs])
+    return _label_pairs_to_csr(src, tgt, unique_labels)
 
 # ------ end of parallel build_contacting ------
 
