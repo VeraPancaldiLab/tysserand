@@ -1,37 +1,101 @@
-[tool.poetry]
-name = "tysserand"
-version = "0.6.0"
-description = "Fast and accurate spatial networks reconstruction."
-authors = ["Alexis Coullomb <alexis.coullomb.pro@gmail.com>"]
-license = "GNU GPLv3"
-readme = "README.md"
-
-[tool.poetry.dependencies]
-python = ">= 3.8"
-ipykernel = "*"
-matplotlib = "*"
-qtconsole = "*"
-scipy = "*"
-seaborn = "*"
-pathlib = "*"
-scikit-learn = "*"
-scikit-image = "*"
-numpy = "*"
-hdbscan = "*"
-umap-learn = "*"
-dask = {extras = ["complete"], version = "*"}
-opencv-python-headless = "*"
-napari = {extras = ["all"], version = "*"}
-
-[tool.poetry.dev-dependencies]
-networkx = "*"
-igraph = "*"
-cairocffi = "*"
-pysal = "*"
-geopandas = "*"
-anndata = "*"
-scanpy = "*"
-
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tysserand"
+version = "1.0.0"
+description = "Fast and accurate spatial networks reconstruction."
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Alexis Coullomb", email = "alexis.coullomb.pro@gmail.com" }]
+requires-python = ">=3.10"
+keywords = ["spatial networks", "bioimage", "spatial omics", "sociology", "econometrics"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+# Core = what the reconstruction, conversion, IO and plotting functions use.
+# Only numpy, pandas, scipy and joblib are imported at module load, the
+# others are imported inside the functions using them.
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "joblib",
+    "scikit-learn",          # build_knn, build_rdn, build_lattice
+    "pynndescent",           # build_knn on large sets
+    "scikit-image",          # build_contacting, mask_val_coord
+    "opencv-python-headless",  # build_contacting
+    "matplotlib",            # plot_*
+    "seaborn",               # plot_*
+]
+
+[project.optional-dependencies]
+# Interactive visualization and annotation (annotation module)
+napari = ["napari[all]"]
+# Bridges to other libraries (interop module)
+interop = ["networkx", "igraph", "anndata"]
+# Jupyter notebooks in examples/, including the publication figures (PySAL)
+notebooks = [
+    "ipykernel",
+    "scanpy",
+    "cairocffi",
+    "libpysal",
+    "geopandas",
+    "pyarrow",
+]
+all = ["tysserand[napari,interop,notebooks]"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pyarrow",
+    "networkx",
+    "igraph",
+    "anndata",
+    "ruff>=0.17.6",
+    "pre-commit>=4.6.2",
+]
+docs = [
+    "mkdocs<2",
+    "mkdocs-material>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+    "pymdown-extensions<12",
+]
+
+[project.urls]
+Homepage = "https://github.com/VeraPancaldiLab/tysserand"
+Documentation = "https://tysserand.readthedocs.io"
+Changelog = "https://github.com/VeraPancaldiLab/tysserand/blob/main/CHANGELOG.md"
+Paper = "https://doi.org/10.1093/bioinformatics/btab490"
+
+[tool.setuptools.packages.find]
+include = ["tysserand*"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["examples", "_wip", "build"]
+
+[tool.ruff.format]
+# keep the existing mix of quotes instead of rewriting every string
+quote-style = "preserve"
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle errors, bugbear and sorted imports
+select = ["E4", "E7", "E9", "F", "B", "I"]
+# zip(strict=...) everywhere would be noise; short names like `l` are used in loops
+ignore = ["B905", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# the package namespace re-exports the public API of submodules
+"*/__init__.py" = ["F401", "F403"]
+"tysserand/tysserand.py" = ["F401", "F403"]
+"tests/*" = ["E731"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tysserand"]

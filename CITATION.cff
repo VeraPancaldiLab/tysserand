@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use tysserand, please cite the article below."
+title: tysserand
+abstract: Fast and accurate spatial networks reconstruction.
+type: software
+authors:
+  - family-names: Coullomb
+    given-names: Alexis
+version: 1.0.0
+date-released: "2026-11-27"
+license: GPL-3.0-or-later
+repository-code: "https://github.com/VeraPancaldiLab/tysserand"
+url: "https://tysserand.readthedocs.io"
+keywords:
+  - spatial networks
+  - bioimage
+  - spatial omics
+preferred-citation:
+  type: article
+  title: "Tysserand—fast and accurate reconstruction of spatial networks from bioimages"
+  authors:
+    - family-names: Coullomb
+      given-names: Alexis
+    - family-names: Pancaldi
+      given-names: Vera
+  journal: Bioinformatics
+  volume: 37
+  issue: 21
+  start: 3989
+  end: 3991
+  year: 2021
+  doi: 10.1093/bioinformatics/btab490

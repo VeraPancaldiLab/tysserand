@@ -1,0 +1,26 @@
+name: Release
+
+# Pushing a version tag (v1.0.0) builds the package and publishes it on PyPI
+# with trusted publishing: no API token, PyPI trusts this workflow, declared as
+# a publisher of the project (environment `pypi`)
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Check the tag matches the package version
+        run: |
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != version $version"; exit 1; }
+      - name: Build
+        run: uv build
+      - name: Publish
+        run: uv publish
