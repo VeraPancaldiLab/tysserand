@@ -3,11 +3,15 @@
 ## Unreleased
 
 ### Changed
+  - `remove_duplicate_pairs`, `merge_pairs`, `pairs_to_df` and `score_method` take CSR adjacency matrices; edge-list arrays are deprecated (`DeprecationWarning`)
+  - `pairs_to_df` can export edge values (weights, distances) with `weight='column_name'`
   - code split into submodules (`build`, `contacting`, `convert`, `distances`, `io`, `plot`, `interop`, `annotation`, `scoring`, `generators`), all public functions available from `import tysserand as ty`; `from tysserand import tysserand as ty` still works
   - heavy libraries (napari, OpenCV, scikit-image, scikit-learn, pynndescent, matplotlib, seaborn) are imported only when used: `import tysserand` drops from ~1.4 s / ~360 MB to ~0.3 s / ~130 MB
   - `build_contacting_parallel` uses joblib instead of Dask (Dask is no longer a dependency) and returns a CSR adjacency matrix identical to `build_contacting`
 
 ### Fixed
+  - `link_solitaries` with a network missing trailing isolated nodes, or with self-loops
+  - `score_method` docstring: it returns 3 rates
   - tiling of `build_contacting_parallel` (1 or 2 splits, non power-of-4 splits, non-square images)
   - `build_contacting_nn` with CSR networks
   - `add_to_AnnData` failing when distances `D` are not provided

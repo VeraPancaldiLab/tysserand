@@ -7,10 +7,10 @@ import os
 import numpy as np
 import pandas as pd
 import joblib
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse
 
 from .build import link_solitaries
-from .convert import vectors_to_csr
+from .convert import _warn_legacy_pairs, remove_duplicate_pairs, vectors_to_csr
 
 __all__ = [
     'find_neighbors',
@@ -452,32 +452,44 @@ def extract_tile(im, limits):
     return tile
 
 
-def merge_pairs(lpairs):
+def merge_pairs(lA, out_dtype=np.int8):
     """
-    Merge a list of Nx2 arrays into a single N'x2 array.
+    Merge a list of networks into a single network, the union of their edges.
 
     Parameters
     ----------
-    lpairs : list
-        The list of detected edges as 2D arrays.
-    
+    lA : list
+        The list of networks as sparse adjacency matrices of identical shape.
+        Passing a list of Nx2 arrays of node pairs is deprecated: it returns
+        their unique rows as before.
+    out_dtype : np.dtype, optional
+        Data type of the output matrix, by default np.int8.
+
     Returns
     -------
-    pairs : array_like
-        The merged detected edges.
-    
-    
-    >>> a = np.arange(4).reshape(-1, 2)
-    >>> b = a + 2
-    >>> lpairs = [a, b]
-    >>> np.unique(np.vstack(lpairs), axis=0)
+    A : scipy.sparse.csr_matrix
+        Symmetric binary CSR adjacency matrix of the merged edges.
+
+    Example
+    -------
+    >>> A1 = vectors_to_csr(np.array([[0, 1], [2, 3]]), n_nodes=6)
+    >>> A2 = vectors_to_csr(np.array([[2, 3], [4, 5]]), n_nodes=6)
+    >>> csr_to_edge_pairs(merge_pairs([A1, A2]))
     array([[0, 1],
            [2, 3],
            [4, 5]])
     """
-    
-    pairs = np.unique(np.vstack(lpairs), axis=0)
-    return pairs
+    if not all(issparse(A) for A in lA):
+        _warn_legacy_pairs('merge_pairs')
+        return np.unique(np.vstack(lA), axis=0)
+    shapes = {A.shape for A in lA}
+    if len(shapes) != 1:
+        raise ValueError(f"networks have different shapes: {shapes}, "
+                         "build them with the same `n_nodes`")
+    A = csr_matrix(lA[0]).astype(bool)
+    for B in lA[1:]:
+        A = A + csr_matrix(B).astype(bool)  # logical OR
+    return remove_duplicate_pairs(A, out_dtype=out_dtype)
 
 
 def build_contacting_parallel(

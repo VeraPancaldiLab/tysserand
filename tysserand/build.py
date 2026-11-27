@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial import Voronoi
 from scipy.sparse import csr_matrix
 
-from .convert import csr_to_edge_pairs, remove_duplicate_pairs, vectors_to_csr
+from .convert import remove_duplicate_pairs, vectors_to_csr
 from .distances import distance_neighbors, find_trim_dist
 
 __all__ = [
@@ -344,17 +344,15 @@ def link_solitaries(
     >>> A = link_solitaries(coords, A, method='knn', min_neighbors=1)
     """
     n_nodes = coords.shape[0]
-    pairs = csr_to_edge_pairs(A)
+    A = A.tocsr(copy=True)
+    if A.shape != (n_nodes, n_nodes):
+        # nodes without edges at the end may be missing from A
+        A.resize((n_nodes, n_nodes))
+    A = remove_duplicate_pairs(A)
 
-    # detect nodes with no edges
-    uniq_nodes = set(range(n_nodes))
-    uniq_pairs = set(np.unique(pairs).tolist()) if len(pairs) > 0 else set()
-    solitaries = uniq_nodes.difference(uniq_pairs)
-    if min_neighbors > 1 and len(pairs) > 0:
-        # detect nodes with too few edges
-        nodes_ids, nodes_counts = np.unique(pairs, return_counts=True)
-        nodes_ids = nodes_ids[nodes_counts < min_neighbors]
-        solitaries = solitaries.union(nodes_ids.tolist())
+    # detect nodes with no edges, or too few edges (self-loops excluded)
+    degrees = np.diff(A.indptr) - A.diagonal()
+    solitaries = np.flatnonzero(degrees < min_neighbors).tolist()
     n_solitaries = len(solitaries)
 
     if n_solitaries == 0:
@@ -390,8 +388,7 @@ def link_solitaries(
                     new_pairs.append((i, int(j)))
 
         if len(new_pairs) > 0:
-            new_pairs = np.array(new_pairs)
-            pairs = np.vstack([pairs, new_pairs]) if len(pairs) > 0 else new_pairs
-            pairs = remove_duplicate_pairs(pairs)
+            A_new = vectors_to_csr(np.array(new_pairs), n_nodes=n_nodes)
+            A = remove_duplicate_pairs(A + A_new)
 
-    return vectors_to_csr(pairs, n_nodes=n_nodes)
+    return A

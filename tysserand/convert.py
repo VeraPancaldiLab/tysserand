@@ -2,9 +2,11 @@
 Conversions between network representations (CSR adjacency, edge pairs,
 DataFrames) and attribute helpers.
 """
+import warnings
+
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse, triu
 
 __all__ = [
     'remove_duplicate_pairs',
@@ -21,33 +23,50 @@ __all__ = [
 ]
 
 
-def remove_duplicate_pairs(pairs):
+def _warn_legacy_pairs(fct_name):
+    warnings.warn(
+        f"`{fct_name}` with edge-list arrays is deprecated, pass CSR adjacency "
+        "matrices instead (see `vectors_to_csr` to convert edge pairs).",
+        DeprecationWarning, stacklevel=3)
+
+
+def remove_duplicate_pairs(A, out_dtype=np.int8):
     """
-    Remove redundant rows in a 2D array.
-    
+    Remove duplicate edges and edge directions from a network.
+
+    Each undirected edge ends up stored once per direction, with a value of 1,
+    whatever its multiplicity or direction(s) in the input.
+
     Parameters
     ----------
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
+    A : scipy.sparse matrix
+        Adjacency matrix, possibly directed, with duplicate (summed or
+        non-coalesced) entries. Passing a (n_pairs x 2) array of node pairs
+        is deprecated: it returns the sorted unique pairs as before.
+    out_dtype : np.dtype, optional
+        Data type of the output matrix, by default np.int8.
 
     Returns
     -------
-    uniq_pairs : ndarray
-        Array of unique pairs, the content of each row is sorted.
-    
+    A_uniq : scipy.sparse.csr_matrix
+        Symmetric binary CSR adjacency matrix.
+
     Example
     -------
-    >>> pairs = [[4, 3],
-                 [1, 2],
-                 [3, 4],
-                 [2, 1]]
-    >>> remove_duplicate_pairs(pairs)
+    >>> A = vectors_to_csr_directed(np.array([[4, 3], [1, 2], [3, 4], [2, 1]]))
+    >>> csr_to_edge_pairs(remove_duplicate_pairs(A))
     array([[1, 2],
            [3, 4]])
     """
-    
-    uniq_pairs = np.unique(np.sort(pairs, axis=1), axis=0)
-    return uniq_pairs
+    if not issparse(A):
+        _warn_legacy_pairs('remove_duplicate_pairs')
+        return np.unique(np.sort(A, axis=1), axis=0)
+    # boolean sums are logical OR: no overflow nor cancellation of entries
+    A = csr_matrix(A).astype(bool)
+    A.eliminate_zeros()
+    A = (A + A.T).tocsr()
+    A.sum_duplicates()
+    return A.astype(out_dtype)
 
 
 def vectors_to_csr(
@@ -230,24 +249,44 @@ def coords_to_df(coords, columns=None):
     return nodes
 
 
-def pairs_to_df(pairs, columns=['source', 'target']):
+def pairs_to_df(A, columns=['source', 'target'], weight=None):
     """
-    Convert an array of pairs of nodes into a dataframe
+    Convert a network into a dataframe of edges, one row per undirected edge.
 
     Parameters
     ----------
-    pairs : ndarray
-        The (n_pairs x 2) array of neighbors indices.
+    A : scipy.sparse matrix
+        Symmetric adjacency matrix. Passing a (n_pairs x 2) array of node
+        pairs is deprecated: its rows are used as they are.
     columns : Index or array-like
-        Column labels to use for resulting frame. Default is ['source', 'target']
+        Column labels of the edges nodes. Default is ['source', 'target']
+    weight : str, optional
+        If given, name of an additional column holding the values of ``A``
+        (edge weights, distances...).
 
     Returns
     -------
     edges : dataframe
-        Edges indicated by the nodes 'source' and 'target' they link.
-    """
+        Edges indicated by the nodes 'source' and 'target' they link,
+        with source < target.
 
-    edges = pd.DataFrame(data=pairs, columns=columns)
+    Example
+    -------
+    >>> A = vectors_to_csr(np.array([[1, 0], [1, 2]]))
+    >>> pairs_to_df(A)
+       source  target
+    0       0       1
+    1       1       2
+    """
+    if not issparse(A):
+        _warn_legacy_pairs('pairs_to_df')
+        return pd.DataFrame(data=A, columns=columns)
+    A = triu(A, k=1, format='coo')
+    A.sum_duplicates()  # canonical row-major order, coalesced entries
+    A.eliminate_zeros()
+    edges = pd.DataFrame({columns[0]: A.row, columns[1]: A.col})
+    if weight is not None:
+        edges[weight] = A.data
     return edges
 
 
