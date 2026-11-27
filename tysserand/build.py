@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial import Voronoi
 from scipy.sparse import csr_matrix
 
-from .convert import remove_duplicate_pairs, vectors_to_csr
+from .convert import _coalesce, to_undirected, vectors_to_csr
 from .distances import distance_neighbors, find_trim_dist
 
 __all__ = [
@@ -318,7 +318,9 @@ def link_solitaries(
     coords : ndarray
         Coordinates of points where each column corresponds to an axis (x, y, ...).
     A : scipy.sparse.csr_matrix
-        CSR adjacency matrix of the network.
+        CSR adjacency matrix of the network, possibly directed or weighted.
+        Node degrees ignore edge directions (i and j are neighbors if
+        ``A[i, j]`` or ``A[j, i]`` is non-zero).
     method : str, optional
         Method used to connect solitary nodes to their neighbors. Default is
         'delaunay'. With 'knn', solitary nodes are connected to their nearest
@@ -336,6 +338,8 @@ def link_solitaries(
     -------
     A : scipy.sparse.csr_matrix
         Updated CSR adjacency matrix, with additional edges for solitary nodes.
+        Existing edges keep their values and directions; new edges are
+        undirected (stored in both directions) with a value of 1.
 
     Example
     -------
@@ -348,10 +352,12 @@ def link_solitaries(
     if A.shape != (n_nodes, n_nodes):
         # nodes without edges at the end may be missing from A
         A.resize((n_nodes, n_nodes))
-    A = remove_duplicate_pairs(A)
+    A = _coalesce(A)
+    # neighbors regardless of edge directions and values
+    A_und = to_undirected(A)
 
     # detect nodes with no edges, or too few edges (self-loops excluded)
-    degrees = np.diff(A.indptr) - A.diagonal()
+    degrees = np.diff(A_und.indptr) - A_und.diagonal()
     solitaries = np.flatnonzero(degrees < min_neighbors).tolist()
     n_solitaries = len(solitaries)
 
@@ -388,7 +394,10 @@ def link_solitaries(
                     new_pairs.append((i, int(j)))
 
         if len(new_pairs) > 0:
-            A_new = vectors_to_csr(np.array(new_pairs), n_nodes=n_nodes)
-            A = remove_duplicate_pairs(A + A_new)
+            A_new = to_undirected(vectors_to_csr(np.array(new_pairs), n_nodes=n_nodes))
+            # only add edges absent from A, so existing values are kept
+            A_new = A_new - A_new.multiply(A.astype(bool))
+            A_new.eliminate_zeros()
+            A = (A + A_new.astype(A.dtype)).tocsr()
 
     return A

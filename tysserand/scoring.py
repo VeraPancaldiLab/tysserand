@@ -4,7 +4,7 @@ Comparison of reconstructed networks with a ground truth.
 import numpy as np
 from scipy.sparse import issparse, triu
 
-from .convert import _warn_legacy_pairs, remove_duplicate_pairs
+from .convert import _warn_legacy_pairs, to_undirected
 
 __all__ = [
     'confusion_stats',
@@ -70,8 +70,8 @@ def score_method(A_true, A_test):
     else:
         shape = tuple(np.maximum(A_true.shape, A_test.shape))
         # binary upper triangles: one entry per undirected edge
-        A_true = triu(remove_duplicate_pairs(_pad_to_shape(A_true, shape)), k=1, format='csr')
-        A_test = triu(remove_duplicate_pairs(_pad_to_shape(A_test, shape)), k=1, format='csr')
+        A_true = triu(to_undirected(_pad_to_shape(A_true, shape)), k=1, format='csr')
+        A_test = triu(to_undirected(_pad_to_shape(A_test, shape)), k=1, format='csr')
         true_pos = A_true.multiply(A_test).nnz
         false_pos = A_test.nnz - true_pos
         false_neg = A_true.nnz - true_pos

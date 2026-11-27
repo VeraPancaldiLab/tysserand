@@ -10,7 +10,7 @@ import joblib
 from scipy.sparse import csr_matrix, issparse
 
 from .build import link_solitaries
-from .convert import _warn_legacy_pairs, remove_duplicate_pairs, vectors_to_csr
+from .convert import _coalesce, _combine_values, _warn_legacy_pairs, vectors_to_csr
 
 __all__ = [
     'find_neighbors',
@@ -452,9 +452,12 @@ def extract_tile(im, limits):
     return tile
 
 
-def merge_pairs(lA, out_dtype=np.int8):
+def merge_pairs(lA, weighted=False, combine='max', out_dtype=None):
     """
     Merge a list of networks into a single network, the union of their edges.
+
+    Edge directions are kept: the union of directed networks is directed,
+    the union of undirected networks is undirected.
 
     Parameters
     ----------
@@ -462,13 +465,22 @@ def merge_pairs(lA, out_dtype=np.int8):
         The list of networks as sparse adjacency matrices of identical shape.
         Passing a list of Nx2 arrays of node pairs is deprecated: it returns
         their unique rows as before.
+    weighted : bool, optional
+        If False (default), the output is binary. If True, edge values are
+        kept, the values of an edge present in several networks being
+        combined with `combine`.
+    combine : {'max', 'sum'}, optional
+        How the values of an edge present in several networks are combined
+        when ``weighted=True``. Default is 'max'.
     out_dtype : np.dtype, optional
-        Data type of the output matrix, by default np.int8.
+        Data type of the output matrix. Default is np.int8 for binary
+        outputs, the data type resulting from the combination of the inputs
+        for weighted outputs.
 
     Returns
     -------
     A : scipy.sparse.csr_matrix
-        Symmetric binary CSR adjacency matrix of the merged edges.
+        CSR adjacency matrix of the merged edges.
 
     Example
     -------
@@ -486,10 +498,19 @@ def merge_pairs(lA, out_dtype=np.int8):
     if len(shapes) != 1:
         raise ValueError(f"networks have different shapes: {shapes}, "
                          "build them with the same `n_nodes`")
+    if weighted:
+        A = _coalesce(lA[0])
+        for B in lA[1:]:
+            A = _combine_values(A, _coalesce(B), combine)
+        A.eliminate_zeros()
+        return A if out_dtype is None else A.astype(out_dtype)
     A = csr_matrix(lA[0]).astype(bool)
     for B in lA[1:]:
         A = A + csr_matrix(B).astype(bool)  # logical OR
-    return remove_duplicate_pairs(A, out_dtype=out_dtype)
+    A = A.tocsr()
+    A.sum_duplicates()
+    A.eliminate_zeros()
+    return A.astype(np.int8 if out_dtype is None else out_dtype)
 
 
 def build_contacting_parallel(
