@@ -1,5 +1,7 @@
 site_name: tysserand
 site_description: Fast and accurate spatial networks reconstruction
+# canonical URL of the version being built on ReadTheDocs (versioned docs)
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, ""]
 repo_url: https://github.com/VeraPancaldiLab/tysserand
 repo_name: VeraPancaldiLab/tysserand
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tysserand"
-version = "0.6.0"
+version = "1.0.0"
 description = "Fast and accurate spatial networks reconstruction."
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -12,6 +12,9 @@ authors = [{ name = "Alexis Coullomb", email = "alexis.coullomb.pro@gmail.com" }
 requires-python = ">=3.10"
 keywords = ["spatial networks", "bioimage", "spatial omics", "sociology", "econometrics"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -67,6 +70,8 @@ docs = [
 
 [project.urls]
 Homepage = "https://github.com/VeraPancaldiLab/tysserand"
+Documentation = "https://tysserand.readthedocs.io"
+Changelog = "https://github.com/VeraPancaldiLab/tysserand/blob/main/CHANGELOG.md"
 Paper = "https://doi.org/10.1093/bioinformatics/btab490"
 
 [tool.setuptools.packages.find]

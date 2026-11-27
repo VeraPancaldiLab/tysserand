@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.0.0 — 2026-11-27
+
+First stable release: networks are `scipy.sparse` CSR adjacency matrices throughout, the API follows semantic versioning from now on (breaking changes only in major releases).
 
 ### Added
   - `to_undirected(A, weighted=False, combine='max')`: symmetrize a network, binary or keeping edge values
@@ -25,7 +27,7 @@
   - code linted and formatted with ruff (`uv run ruff check .`, `uv run ruff format .`), pre-commit hooks (`uv run pre-commit install`) and GitHub Actions running the linters, the tests (Python 3.10 and 3.12) and the documentation build
 
 ### Deprecated
-  - `from tysserand import tysserand as ty`: use `import tysserand as ty`; the `tysserand.tysserand` module still re-exports the whole API but emits a `FutureWarning` and will be removed in a future release
+  - `from tysserand import tysserand as ty`: use `import tysserand as ty`; the `tysserand.tysserand` module still re-exports the whole API but emits a `FutureWarning` and will be removed in v2.0
 
 ### Fixed
   - `link_solitaries` with a network missing trailing isolated nodes, or with self-loops

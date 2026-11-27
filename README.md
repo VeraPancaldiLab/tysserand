@@ -6,7 +6,8 @@ Fast and accurate spatial networks reconstruction.
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
 You can find the article and supplementary information on [Bioinformatics](https://doi.org/10.1093/bioinformatics/btab490), and the freely available preprint (same text!) is on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v2).  
-A turorial is available [here](./examples/02-tutorial.ipynb)
+A tutorial is available [here](./examples/02-tutorial.ipynb).  
+📖 **Documentation:** [tysserand.readthedocs.io](https://tysserand.readthedocs.io) · 📝 [Changelog](https://github.com/VeraPancaldiLab/tysserand/blob/main/CHANGELOG.md)
 
 *tysserand* is fast: it is 50 to more than 120 times faster than PySAL.  
 *tysserand* is accurate: it implements the best performing methods, tested on simulated and real bioimages.

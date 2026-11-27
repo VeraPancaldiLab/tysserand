@@ -3,7 +3,7 @@ Deprecated namespace: ``from tysserand import tysserand as ty``.
 
 The code lives in the submodules of the package and every public function is
 available from the package itself: use ``import tysserand as ty``.
-This module will be removed in a future release.
+This module will be removed in v2.0.
 """
 
 import warnings
@@ -12,7 +12,7 @@ import warnings
 # when triggered from library code, and users mostly import from notebooks/scripts.
 warnings.warn(
     "`from tysserand import tysserand as ty` is deprecated and will be removed "
-    "in a future release, use `import tysserand as ty` instead.",
+    "in v2.0, use `import tysserand as ty` instead.",
     FutureWarning,
     stacklevel=2,
 )
