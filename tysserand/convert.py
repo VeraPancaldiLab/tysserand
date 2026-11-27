@@ -330,7 +330,7 @@ def coords_to_df(coords, columns=None):
     return nodes
 
 
-def pairs_to_df(A, columns=['source', 'target'], weight=None, directed=None):
+def pairs_to_df(A, columns=('source', 'target'), weight=None, directed=None):
     """
     Convert a network into a dataframe of edges.
 
@@ -340,7 +340,7 @@ def pairs_to_df(A, columns=['source', 'target'], weight=None, directed=None):
         Adjacency matrix. Passing a (n_pairs x 2) array of node pairs is
         deprecated: its rows are used as they are.
     columns : Index or array-like
-        Column labels of the edges nodes. Default is ['source', 'target']
+        Column labels of the edges nodes. Default is ('source', 'target')
     weight : str, optional
         If given, name of an additional column holding the values of ``A``
         (edge weights, distances...).
