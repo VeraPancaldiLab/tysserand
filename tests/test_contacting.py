@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from tysserand import tysserand as ty
+from tysserand import contacting
 
 
 @pytest.fixture(scope="module", params=[(600, 600, 12), (300, 500, 10), (700, 200, 8)])
@@ -49,7 +50,7 @@ def test_build_contacting_many_shared_pixels():
 @pytest.mark.parametrize("backend", ["loky", "threading"])
 def test_build_contacting_parallel_identical(masks, r, n_splits, backend):
     A = ty.build_contacting(masks, r=r)
-    with mock.patch.object(ty, "choose_optimal_image_split", return_value=n_splits):
+    with mock.patch.object(contacting, "choose_optimal_image_split", return_value=n_splits):
         A_paral = ty.build_contacting_parallel(masks, r=r, n_jobs=2, backend=backend)
     assert A_paral.shape == A.shape
     assert (A != A_paral).nnz == 0
