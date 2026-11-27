@@ -24,28 +24,19 @@ If you want the latest features not published on PyPI run
 pip install git+https://github.com/VeraPancaldiLab/tysserand.git
 ```
 
-It is best practice to create a dedicated environment for each project.
-To do it with pyenv:
+Optional dependencies are grouped in extras: `napari` (interactive visualization and annotation), `interop` (NetworkX, iGraph and AnnData bridges), `notebooks` (Jupyter tutorials and publication figures, including PySAL), or `all`:
 ```bash
-# create environment
-pyenv install 3.10.13
-pyenv virtualenv 3.10.13 spatial-networks
-# add environment to jupyterlab
-pyenv activate spatial-networks
-ipython kernel install --user --name=spatial-networks
+pip install "tysserand[all]"
 ```
-or with Conda and Mamba:
+
+For development, the environment is managed with [uv](https://docs.astral.sh/uv/):
 ```bash
-# create environment
-conda install mamba -n base -c conda-forge
-mamba env create --file environment.yml
-# add environment to jupyterlab
-conda activate spatial-networks
-ipython kernel install --user --name=spatial-networks
-```
-If you want to reproduce results in the publication, install also PySAL
-```bash
-pip install libpysal geopandas fiona shapely pyproj rtree
+git clone https://github.com/VeraPancaldiLab/tysserand.git
+cd tysserand
+uv sync --extra all   # creates .venv with tysserand installed in editable mode
+uv run pytest -q tests
+# add the environment to jupyterlab
+uv run python -m ipykernel install --user --name=spatial-networks
 ```
 
 
