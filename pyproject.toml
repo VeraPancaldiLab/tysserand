@@ -50,6 +50,12 @@ all = ["tysserand[napari,interop,notebooks]"]
 
 [dependency-groups]
 dev = ["pytest", "pyarrow", "networkx", "igraph", "anndata"]
+docs = [
+    "mkdocs<2",
+    "mkdocs-material>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+    "pymdown-extensions<12",
+]
 
 [project.urls]
 Homepage = "https://github.com/VeraPancaldiLab/tysserand"

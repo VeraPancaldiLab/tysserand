@@ -12,3 +12,6 @@ dist/
 __pycache__/
 .pytest_cache/
 .venv/
+
+# documentation build
+site/

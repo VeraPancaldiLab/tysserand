@@ -1,12 +1,23 @@
 """
 Bridges to NetworkX, iGraph and AnnData.
 """
+
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 
 from .convert import categorical_to_integer
 from .distances import distance_neighbors
+
+from typing import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+    import anndata as ad
+    import igraph as ig
+    import networkx as nx
 
 __all__ = [
     'to_NetworkX',
@@ -19,7 +30,7 @@ __all__ = [
 def to_NetworkX(
     A: csr_matrix,
     attributes: pd.DataFrame = None,
-):
+) -> nx.Graph:
     """
     Convert a CSR adjacency matrix to a NetworkX graph.
 
@@ -47,7 +58,7 @@ def to_iGraph(
     A: csr_matrix,
     attributes: pd.DataFrame = None,
     directed: bool = False,
-):
+) -> ig.Graph:
     """
     Convert a CSR adjacency matrix to an igraph graph.
 
@@ -86,13 +97,13 @@ def add_to_AnnData(
     coords: np.ndarray,
     A: csr_matrix,
     D: csr_matrix = None,
-    adata=None,
-    counts=None,
-    obs_names=None,
-    var_names=None,
+    adata: ad.AnnData | None = None,
+    counts: ArrayLike | None = None,
+    obs_names: Sequence[str] | None = None,
+    var_names: Sequence[str] | None = None,
     return_adata: bool = False,
     network_metadata: dict = None,
-):
+) -> ad.AnnData | None:
     """
     Add a CSR network to an AnnData (Scanpy) object, created if not provided.
 
@@ -151,10 +162,10 @@ def add_to_AnnData(
 
 
 def get_from_AnnData(
-    adata,
+    adata: ad.AnnData,
     key_connectivities: str = 'connectivities',
     key_distances: str = 'distances',
-):
+) -> tuple[np.ndarray, csr_matrix, csr_matrix]:
     """
     Extract network CSR matrices and coordinates from an AnnData object.
 

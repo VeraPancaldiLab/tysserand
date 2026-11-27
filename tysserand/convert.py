@@ -2,11 +2,20 @@
 Conversions between network representations (CSR adjacency, edge pairs,
 DataFrames) and attribute helpers.
 """
+
+from __future__ import annotations
 import warnings
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, issparse, triu
+
+from typing import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+    from numpy.typing import DTypeLike
 
 __all__ = [
     'is_directed',
@@ -50,14 +59,14 @@ def _coalesce(A):
     return A
 
 
-def is_directed(A):
+def is_directed(A: csr_matrix) -> bool:
     """True if the adjacency matrix ``A`` is not symmetric (edge directions
     or weights differ between ``A[i, j]`` and ``A[j, i]``)."""
     A = _coalesce(A)
     return (A != A.T).nnz > 0
 
 
-def to_undirected(A, weighted=False, combine='max', out_dtype=None):
+def to_undirected(A: csr_matrix, weighted: bool = False, combine: str = 'max', out_dtype: DTypeLike | None = None) -> csr_matrix:
     """
     Convert a network to an undirected (symmetric) network.
 
@@ -104,7 +113,7 @@ def to_undirected(A, weighted=False, combine='max', out_dtype=None):
     return A.astype(np.int8 if out_dtype is None else out_dtype)
 
 
-def remove_duplicate_pairs(A, out_dtype=np.int8):
+def remove_duplicate_pairs(A: csr_matrix | np.ndarray, out_dtype: DTypeLike = np.int8) -> csr_matrix | np.ndarray:
     """
     Deprecated, use :func:`to_undirected`.
 
@@ -257,7 +266,7 @@ def csr_to_edge_coords(coords: np.ndarray, A: csr_matrix, directed: bool = None)
     return [coords[pair] for pair in pairs]
 
 
-def attributes_to_matrix(nodes, attributes):
+def attributes_to_matrix(nodes: pd.DataFrame, attributes: list[str]) -> np.ndarray:
     """
     Build the ``(n_nodes, n_attributes)`` matrix ``C`` of node attributes aligned
     to the adjacency matrix node order (positional index ``0..n-1``). It is used,
@@ -286,7 +295,7 @@ def attributes_to_matrix(nodes, attributes):
     return C
 
 
-def categorical_to_integer(l):
+def categorical_to_integer(l: ArrayLike) -> np.ndarray:
     uniq = set(l)
     nb_uniq = len(uniq)
     mapping = dict(zip(uniq, range(nb_uniq)))
@@ -294,13 +303,13 @@ def categorical_to_integer(l):
     return converted
 
 
-def flatten_categories(nodes, att):
+def flatten_categories(nodes: pd.DataFrame, att: list[str]) -> pd.Series:
     # the reverse operation is 
     # nodes = nodes.join(pd.get_dummies(nodes['nodes_class']))
     return nodes.loc[:, att].idxmax(axis=1)
 
 
-def coords_to_df(coords, columns=None):
+def coords_to_df(coords: np.ndarray, columns: Sequence[str] | None = None) -> pd.DataFrame:
     """
     Convert an array of coordinates of nodes into a dataframe.
 
@@ -330,7 +339,7 @@ def coords_to_df(coords, columns=None):
     return nodes
 
 
-def pairs_to_df(A, columns=('source', 'target'), weight=None, directed=None):
+def pairs_to_df(A: csr_matrix | np.ndarray, columns: Sequence[str] = ('source', 'target'), weight: str | None = None, directed: bool | None = None) -> pd.DataFrame:
     """
     Convert a network into a dataframe of edges.
 
@@ -384,7 +393,7 @@ def pairs_to_df(A, columns=('source', 'target'), weight=None, directed=None):
     return edges
 
 
-def double_sort(data, last_var=0):
+def double_sort(data: np.ndarray, last_var: int = 0) -> np.ndarray:
     """
     Sort twice an array, first on axis 1, then preserves
     whole rows and sort by one column on axis 0.

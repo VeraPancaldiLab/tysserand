@@ -1,6 +1,8 @@
 """
 Network reconstruction from node coordinates.
 """
+
+from __future__ import annotations
 import numpy as np
 from scipy.spatial import Voronoi
 from scipy.sparse import csr_matrix
@@ -20,13 +22,13 @@ __all__ = [
 def build_delaunay(
     coords: np.ndarray,
     min_dist: float = 0,
-    trim_dist = 'percentile_size',
+    trim_dist: str | float | None = 'percentile_size',
     perc: float = 99,
     node_adaptive_trimming: bool = False,
     n_edges: int = 3,
     trim_dist_ratio: float = 2,
     return_dist: bool = False,
-):
+) -> csr_matrix | tuple[csr_matrix, csr_matrix]:
     """
     Reconstruct edges between nodes by Delaunay triangulation, returning a CSR adjacency matrix.
     Use `trim_dist` to remove edges above a threshold distance.
@@ -109,7 +111,7 @@ def build_knn(
     metric: str = 'euclidean',
     n_jobs: int = -1,
     undirected: bool = True,
-    random_state=None,
+    random_state: int | np.random.RandomState | None = None,
     **kwargs,
 ) -> csr_matrix:
     """
@@ -309,13 +311,13 @@ def build_lattice(
 
 
 def link_solitaries(
-    coords,
-    A,
-    method='delaunay',
-    min_neighbors=3,
-    all_pairs=None,
-    all_dist=None,
-    verbose=1):
+    coords: np.ndarray,
+    A: csr_matrix,
+    method: str = 'delaunay',
+    min_neighbors: int = 3,
+    all_pairs: np.ndarray | None = None,
+    all_dist: np.ndarray | None = None,
+    verbose: int = 1) -> csr_matrix:
     """
     Detect nodes that are not connected (or under-connected) and link them to
     other nodes, returning an updated CSR adjacency matrix.

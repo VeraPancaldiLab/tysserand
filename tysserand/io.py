@@ -1,6 +1,8 @@
 """
 Network persistence as sparse ``.npz`` files.
 """
+
+from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
@@ -15,7 +17,7 @@ __all__ = [
 ]
 
 
-def save_network(A, path):
+def save_network(A: csr_matrix, path: str | Path) -> None:
     """
     Save a CSR adjacency matrix to a sparse ``.npz`` file.
 
@@ -31,7 +33,7 @@ def save_network(A, path):
     save_npz(str(path), A)
 
 
-def load_network(path):
+def load_network(path: str | Path) -> csr_matrix:
     """
     Load a CSR adjacency matrix saved with :func:`save_network`.
 
@@ -48,8 +50,8 @@ def load_network(path):
     return load_npz(str(path)).tocsr()
 
 
-def migrate_edges_to_npz(directory, nodes_dir=None, extension='parquet',
-                         overwrite=False, verbose=1):
+def migrate_edges_to_npz(directory: str | Path, nodes_dir: str | Path | None = None, extension: str = 'parquet',
+                         overwrite: bool = False, verbose: int = 1) -> None:
     """
     One-time migration of edge-list network files to sparse ``.npz`` CSR files.
 

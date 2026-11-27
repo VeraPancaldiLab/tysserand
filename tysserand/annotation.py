@@ -1,10 +1,22 @@
 """
 Interactive visualization and annotation of networks in napari.
 """
+
+from __future__ import annotations
 import numpy as np
 import joblib
 
 from .convert import csr_to_edge_coords, vectors_to_csr
+
+from typing import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+    from pathlib import Path
+    from scipy.sparse import csr_matrix
+    import napari
+    import pandas as pd
 
 __all__ = [
     'visualize',
@@ -24,7 +36,7 @@ __all__ = [
 ]
 
 
-def visualize(viewer, img, colormaps=None):
+def visualize(viewer: napari.Viewer, img: np.ndarray, colormaps: dict | None = None) -> None:
     """
     Create a napari viewer instance with image splitted into
     separate channels.
@@ -50,7 +62,7 @@ def visualize(viewer, img, colormaps=None):
     return
 
 
-def get_annotation_names(viewer):
+def get_annotation_names(viewer: napari.Viewer) -> tuple[str, str]:
     """Detect the names of nodes and edges layers"""
     import napari
 
@@ -66,7 +78,7 @@ def get_annotation_names(viewer):
     return layer_nodes_name, layer_edges_name
 
 
-def convert_nodes_tys_to_nap(coords):
+def convert_nodes_tys_to_nap(coords: np.ndarray) -> np.ndarray:
     """
     Reverse the x, y, z ordering of nodes coordinates to match napari's convention.
     """
@@ -74,7 +86,7 @@ def convert_nodes_tys_to_nap(coords):
     return new_nodes
 
 
-def convert_edges_tys_to_nap(coords, pairs):
+def convert_edges_tys_to_nap(coords: np.ndarray, pairs: np.ndarray) -> list[np.ndarray]:
     """
     Make start and end coordinates of edges for napari.
 
@@ -93,10 +105,10 @@ def convert_edges_tys_to_nap(coords, pairs):
     return new_edges
 
 
-def make_annotation_dict(coords, A=None, pairs=None,
-                         nodes_class=None,
-                         nodes_class_color_mapper=None,
-                         ):
+def make_annotation_dict(coords: np.ndarray, A: csr_matrix | None = None, pairs: np.ndarray | None = None,
+                         nodes_class: ArrayLike | None = None,
+                         nodes_class_color_mapper: dict | None = None,
+                         ) -> dict:
     """
     Create a dictionary of annotations from tysserand network objects.
 
@@ -141,7 +153,7 @@ def make_annotation_dict(coords, A=None, pairs=None,
     return annotations
 
 
-def get_annotation_dict(viewer, layer_nodes_name, layer_edges_name):
+def get_annotation_dict(viewer: napari.Viewer, layer_nodes_name: str, layer_edges_name: str) -> dict:
     """
     Create a dictionnary of annotations from layers in a napari viewer.
     """
@@ -172,7 +184,7 @@ def get_annotation_dict(viewer, layer_nodes_name, layer_edges_name):
     return annotations
 
 
-def save_annotations(path, viewer=None, annotations=None, layer_names=None):
+def save_annotations(path: str | Path, viewer: napari.Viewer | None = None, annotations: dict | None = None, layer_names: Sequence[str] | None = None) -> None:
     """"
     Create and save annotations in the layers of a napari viewer.
     """
@@ -186,7 +198,7 @@ def save_annotations(path, viewer=None, annotations=None, layer_names=None):
     return
 
 
-def load_annotations(path):
+def load_annotations(path: str | Path) -> dict:
     """"
     Load annotations for the layers of a napari viewer.
     """
@@ -195,10 +207,10 @@ def load_annotations(path):
 
 
 def add_nodes(
-    viewer, 
-    annotations,
-    name='nodes',
-    ):
+    viewer: napari.Viewer, 
+    annotations: dict,
+    name: str = 'nodes',
+    ) -> None:
     """
     Add nodes annotations in a napari viewer.
     """
@@ -221,11 +233,11 @@ def add_nodes(
 
 
 def add_edges(
-    viewer, 
-    annotations,
-    edge_color='white',
-    name='edges',
-    ):
+    viewer: napari.Viewer, 
+    annotations: dict,
+    edge_color: str = 'white',
+    name: str = 'edges',
+    ) -> None:
     """
     Add edges annotations in a napari viewer.
     """
@@ -245,12 +257,12 @@ def add_edges(
 
 
 def add_annotations(
-    viewer,
-    annotations,
-    layer_nodes_name='nodes',
-    layer_edges_name='edges',
-    edge_color='white',
-    ):
+    viewer: napari.Viewer,
+    annotations: dict,
+    layer_nodes_name: str = 'nodes',
+    layer_edges_name: str = 'edges',
+    edge_color: str = 'white',
+    ) -> None:
     """
     Add nodes and edges annotations in a napari viewer.
     """
@@ -262,7 +274,7 @@ def add_annotations(
     return
 
 
-def assign_nodes_to_edges(nodes, edges, n_nodes=None):
+def assign_nodes_to_edges(nodes: pd.DataFrame, edges: np.ndarray, n_nodes: int | None = None) -> tuple[np.ndarray, csr_matrix]:
     """
     Snap edge endpoints to nearest nodes and return a CSR adjacency matrix.
 
@@ -302,11 +314,11 @@ def assign_nodes_to_edges(nodes, edges, n_nodes=None):
 
 
 def update_edges(
-    viewer, 
-    annotations, 
-    edge_color='white',
-    name='edges',
-    ):    
+    viewer: napari.Viewer, 
+    annotations: dict, 
+    edge_color: str = 'white',
+    name: str = 'edges',
+    ) -> None:    
     """
     Replace edges annotations with new ones in a napari viewer.
     """
@@ -320,12 +332,12 @@ def update_edges(
 
 
 def update_annotations(
-    viewer,
-    annotations,
-    layer_nodes_name='nodes',
-    layer_edges_name='edges',
-    edge_color='white',
-    ):
+    viewer: napari.Viewer,
+    annotations: dict,
+    layer_nodes_name: str = 'nodes',
+    layer_edges_name: str = 'edges',
+    edge_color: str = 'white',
+    ) -> None:
     """
     Update nodes and edges annotations in a napari viewer.
     """

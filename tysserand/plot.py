@@ -1,9 +1,18 @@
 """
 Network plotting with matplotlib.
 """
+
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from matplotlib.colors import Colormap
+    from numpy.typing import ArrayLike
+    import matplotlib.pyplot as plt
 
 __all__ = [
     'rescale',
@@ -13,10 +22,10 @@ __all__ = [
 ]
 
 
-def rescale(data, perc_mini=1, perc_maxi=99, 
-            out_mini=0, out_maxi=1, 
-            cutoff_mini=True, cutoff_maxi=True, 
-            return_extrema=False):
+def rescale(data: ArrayLike, perc_mini: float = 1, perc_maxi: float = 99, 
+            out_mini: float = 0, out_maxi: float = 1, 
+            cutoff_mini: bool = True, cutoff_maxi: bool = True, 
+            return_extrema: bool = False) -> np.ndarray | tuple[np.ndarray, float, float]:
     """
     Normalize the intensities of a planar 2D image.
 
@@ -68,13 +77,13 @@ def plot_network(
     coords: np.ndarray,
     A: csr_matrix,
     disp_id: bool = False,
-    labels=None,
-    color_mapper=None, show_legend=True, legend_opt=None,
-    col_nodes=None, cmap_nodes=None, marker=None,
-    size_nodes=None, col_edges='k', alpha_edges=0.5,
-    linewidth=None, skip_edges=False,
-    ax=None, figsize=(15, 15), aspect='equal', **kwargs,
-):
+    labels: ArrayLike | None = None,
+    color_mapper: dict | None = None, show_legend: bool = True, legend_opt: dict | None = None,
+    col_nodes: str | ArrayLike | None = None, cmap_nodes: str | Colormap | list | None = None, marker: str | None = None,
+    size_nodes: float | ArrayLike | None = None, col_edges: str = 'k', alpha_edges: float = 0.5,
+    linewidth: float | None = None, skip_edges: bool = False,
+    ax: plt.Axes | None = None, figsize: tuple[float, float] = (15, 15), aspect: str = 'equal', **kwargs,
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a network.
 
@@ -184,12 +193,12 @@ def plot_network(
 def plot_network_distances(
     coords: np.ndarray,
     D: csr_matrix,
-    labels=None,
-    color_mapper=None, show_legend=True, legend_opt=None,
-    col_nodes=None, cmap_nodes=None, marker=None, size_nodes=None,
-    cmap_edges='viridis', alpha_edges=0.7, linewidth=None,
-    figsize=(15, 15), ax=None, aspect='equal', **kwargs,
-):
+    labels: ArrayLike | None = None,
+    color_mapper: dict | None = None, show_legend: bool = True, legend_opt: dict | None = None,
+    col_nodes: str | ArrayLike | None = None, cmap_nodes: str | Colormap | list | None = None, marker: str | None = None, size_nodes: float | ArrayLike | None = None,
+    cmap_edges: str | Colormap = 'viridis', alpha_edges: float = 0.7, linewidth: float | None = None,
+    figsize: tuple[float, float] = (15, 15), ax: plt.Axes | None = None, aspect: str = 'equal', **kwargs,
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a network with edges colored by their length.
 
@@ -298,7 +307,7 @@ def plot_network_distances(
         return fig, ax
 
 
-def showim(image, figsize=(9,9), ax=None, **kwargs):
+def showim(image: np.ndarray, figsize: tuple[float, float] = (9,9), ax: plt.Axes | None = None, **kwargs) -> tuple[plt.Figure, plt.Axes]:
     """
     Displays an image with thigh layout and without axes.
 

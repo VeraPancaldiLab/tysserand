@@ -1,6 +1,8 @@
 """
 Synthetic nodes and segmented images, for tests and tutorials.
 """
+
+from __future__ import annotations
 import numpy as np
 
 __all__ = [
@@ -10,7 +12,7 @@ __all__ = [
 ]
 
 
-def make_simple_coords():
+def make_simple_coords() -> np.ndarray:
     """
     Makes really simple coordinates to illustrate network construction methods.
 
@@ -26,7 +28,7 @@ def make_simple_coords():
     return coords
 
 
-def make_random_nodes(size=100, ndim=2, expand=True, random_state=None):
+def make_random_nodes(size: int = 100, ndim: int = 2, expand: bool = True, random_state: int | np.random.Generator | None = None) -> np.ndarray:
     """
     Make a random set of nodes
 
@@ -56,9 +58,9 @@ def make_random_nodes(size=100, ndim=2, expand=True, random_state=None):
     return coords
 
 
-def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
-                      regular=True, double_pattern_y=False, double_pattern_z=False, 
-                      assym_y=True, assym_z=True, return_image=False, random_state=None):
+def make_random_tiles(sx: int = 500, sy: int = 500, sz: int = 0, nb: int = 50, noise_sigma: float | None = None,
+                      regular: bool = True, double_pattern_y: bool = False, double_pattern_z: bool = False, 
+                      assym_y: bool = True, assym_z: bool = True, return_image: bool = False, random_state: int | np.random.Generator | None = None) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Build contacting areas similar to cell segmentation in tissues.
 
@@ -78,10 +80,12 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
     regular : bool, optional
         If True points are on a regular lattice, else they are randomly located. 
         The default is True.
-    double_pattern : bool, optional
-        If True the regular lattice has more points. The default is False.
-    assym_y : bool, optional
-        If True the frenquency of seeds is twice higher on the y-axis. The default is True.
+    double_pattern_y, double_pattern_z : bool, optional
+        If True the regular lattice has more points along the y / z axis.
+        The default is False.
+    assym_y, assym_z : bool, optional
+        If True the frenquency of seeds is twice higher on the y / z axis.
+        The default is True.
     return_image : bool, optional
         If True the image of seed points is also returned. The default is False.
     random_state : None, int or numpy.random.Generator, optional
@@ -97,7 +101,7 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
         
     Examples
     --------
-    >>> coords, masks, image = make_random_tiles(double_pattern=True, return_image=True)
+    >>> coords, masks, image = make_random_tiles(double_pattern_y=True, return_image=True)
     >>> showim(image)
     >>> label_cmap = mpl.colormaps.get_cmap('Set2')(range(8))
     >>> showim(color.label2rgb(masks, bg_label=0, colors=label_cmap), origin='lower')

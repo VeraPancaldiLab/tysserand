@@ -1,0 +1,49 @@
+site_name: tysserand
+site_description: Fast and accurate spatial networks reconstruction
+repo_url: https://github.com/VeraPancaldiLab/tysserand
+repo_name: VeraPancaldiLab/tysserand
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - API reference:
+      - api/index.md
+      - Reconstruction: api/build.md
+      - Contacting areas: api/contacting.md
+      - Conversions: api/convert.md
+      - Distances: api/distances.md
+      - Input / output: api/io.md
+      - Plotting: api/plot.md
+      - Interoperability: api/interop.md
+      - Annotation (napari): api/annotation.md
+      - Scoring: api/scoring.md
+      - Generators: api/generators.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: numpy
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            filters: ["!^_"]
+            show_if_no_docstring: true

@@ -2,6 +2,8 @@
 Network reconstruction from segmented images (contacting areas), with a
 tiled parallel version.
 """
+
+from __future__ import annotations
 import os
 
 import numpy as np
@@ -11,6 +13,12 @@ from scipy.sparse import csr_matrix, issparse
 
 from .build import link_solitaries
 from .convert import _coalesce, _combine_values, _warn_legacy_pairs, vectors_to_csr
+
+from typing import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from numpy.typing import DTypeLike
 
 __all__ = [
     'find_neighbors',
@@ -27,7 +35,7 @@ __all__ = [
 ]
 
 
-def find_neighbors(masks, i, r=1):
+def find_neighbors(masks: np.ndarray, i: int, r: int = 1) -> np.ndarray:
     """
     Find the neighbors of a given mask.
     
@@ -204,7 +212,7 @@ def mask_val_coord(
     return coords
 
 
-def build_contacting_nn(masks, r=1, k=3):
+def build_contacting_nn(masks: np.ndarray, r: int = 1, k: int = 3) -> tuple[np.ndarray, csr_matrix]:
     """
     Build a network from segmented regions as a mix between
     the contacting areas method, that can output some nodes
@@ -237,7 +245,7 @@ def build_contacting_nn(masks, r=1, k=3):
     return coords, A
 
 
-def choose_optimal_image_split(im, method='im_size', min_tile_size=360000):
+def choose_optimal_image_split(im: np.ndarray, method: str = 'im_size', min_tile_size: int = 360000) -> int:
     """
     Compute the optimal number of splits of an image
     to run in parallel a function of each core.
@@ -300,7 +308,7 @@ def choose_optimal_image_split(im, method='im_size', min_tile_size=360000):
     return n_splits
 
 
-def split_range(r, n):
+def split_range(r: int, n: int) -> list[list[int]]:
     """
     Computes the indices of segments after splitting a range of r values
     into n segments.
@@ -333,7 +341,7 @@ def split_range(r, n):
     return segments
 
 
-def extend_indices(segments, margin):
+def extend_indices(segments: list, margin: int) -> list[list[int]]:
     """
     Decrease and increase the values of the first and last elements
     respectively in each list of segments by a given margin.
@@ -367,7 +375,7 @@ def extend_indices(segments, margin):
     return segments
 
 
-def make_tiles_limits(im, n_splits, margin=0):
+def make_tiles_limits(im: np.ndarray, n_splits: int, margin: int = 0) -> list[list[int]]:
     """
     Compute the indices in an image to split it into several tiles.
 
@@ -418,7 +426,7 @@ def make_tiles_limits(im, n_splits, margin=0):
     return tiles_indices
 
 
-def extract_tile(im, limits):
+def extract_tile(im: np.ndarray, limits: Sequence[int]) -> np.ndarray:
     """
     Extract a tile from an image given
     its [xmin, xmax, ymin, ymax] limit indices.
@@ -452,7 +460,7 @@ def extract_tile(im, limits):
     return tile
 
 
-def merge_pairs(lA, weighted=False, combine='max', out_dtype=None):
+def merge_pairs(lA: Sequence[csr_matrix | np.ndarray], weighted: bool = False, combine: str = 'max', out_dtype: DTypeLike | None = None) -> csr_matrix | np.ndarray:
     """
     Merge a list of networks into a single network, the union of their edges.
 
