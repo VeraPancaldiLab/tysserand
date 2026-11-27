@@ -1,6 +1,7 @@
 """
 Edge distances, distance-based trimming and weights.
 """
+
 import numpy as np
 from scipy.sparse import csr_matrix
 
@@ -63,7 +64,7 @@ def find_trim_dist(
     dist = D.data
     if method == 'percentile_size':
         nb_nodes = D.shape[0]
-        prop_edges = 4 / nb_nodes ** 0.5
+        prop_edges = 4 / nb_nodes**0.5
         perc = 100 * (1 - prop_edges * 0.5)
     return float(np.percentile(dist, perc))
 

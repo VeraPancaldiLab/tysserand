@@ -3,10 +3,11 @@ Network persistence as sparse ``.npz`` files.
 """
 
 from __future__ import annotations
+
 from pathlib import Path
 
 import pandas as pd
-from scipy.sparse import csr_matrix, save_npz, load_npz
+from scipy.sparse import csr_matrix, load_npz, save_npz
 
 from .convert import vectors_to_csr
 
@@ -50,8 +51,13 @@ def load_network(path: str | Path) -> csr_matrix:
     return load_npz(str(path)).tocsr()
 
 
-def migrate_edges_to_npz(directory: str | Path, nodes_dir: str | Path | None = None, extension: str = 'parquet',
-                         overwrite: bool = False, verbose: int = 1) -> None:
+def migrate_edges_to_npz(
+    directory: str | Path,
+    nodes_dir: str | Path | None = None,
+    extension: str = 'parquet',
+    overwrite: bool = False,
+    verbose: int = 1,
+) -> None:
     """
     One-time migration of edge-list network files to sparse ``.npz`` CSR files.
 
@@ -85,7 +91,7 @@ def migrate_edges_to_npz(directory: str | Path, nodes_dir: str | Path | None = N
         raise ValueError(f"Unsupported extension: {extension}")
 
     for edges_path in sorted(directory.glob(f'edges_*.{extension}')):
-        group = edges_path.stem[len('edges_'):]
+        group = edges_path.stem[len('edges_') :]
         out_path = directory / f'edges_{group}.npz'
         if out_path.exists() and not overwrite:
             continue

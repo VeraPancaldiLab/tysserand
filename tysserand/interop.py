@@ -3,6 +3,9 @@ Bridges to NetworkX, iGraph and AnnData.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Sequence
+
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
@@ -10,14 +13,11 @@ from scipy.sparse import csr_matrix
 from .convert import categorical_to_integer
 from .distances import distance_neighbors
 
-from typing import Sequence
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from numpy.typing import ArrayLike
     import anndata as ad
     import igraph as ig
     import networkx as nx
+    from numpy.typing import ArrayLike
 
 __all__ = [
     'to_NetworkX',
@@ -47,6 +47,7 @@ def to_NetworkX(
         The converted network.
     """
     import networkx as nx
+
     G = nx.from_scipy_sparse_array(A)
     if attributes is not None:
         for col in attributes.columns:
@@ -80,6 +81,7 @@ def to_iGraph(
     """
     import igraph as ig
     from scipy.sparse import triu
+
     if directed:
         G = ig.Graph.Adjacency(A, mode='directed')
     else:
@@ -136,6 +138,7 @@ def add_to_AnnData(
     if adata is None:
         return_adata = True
         import anndata as ad
+
         if counts is None:
             counts = np.empty(shape=(len(coords), 1))
         adata = ad.AnnData(csr_matrix(counts))
@@ -151,11 +154,15 @@ def add_to_AnnData(
     adata.obsp['connectivities'] = A
     adata.obsp['distances'] = D
     if network_metadata is None:
-        network_metadata = {'connectivities_key': 'connectivities',
-                            'distances_key': 'distances',
-                            'params': {'method': 'delaunay',
-                                       'metric': 'euclidean',
-                                       'edge_trimming': 'percentile 99'}}
+        network_metadata = {
+            'connectivities_key': 'connectivities',
+            'distances_key': 'distances',
+            'params': {
+                'method': 'delaunay',
+                'metric': 'euclidean',
+                'edge_trimming': 'percentile 99',
+            },
+        }
     adata.uns['neighbors'] = network_metadata
     if return_adata:
         return adata

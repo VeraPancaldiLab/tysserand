@@ -4,18 +4,17 @@ tiled parallel version.
 """
 
 from __future__ import annotations
-import os
 
+import os
+from typing import TYPE_CHECKING, Sequence
+
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
 from scipy.sparse import csr_matrix, issparse
 
 from .build import link_solitaries
 from .convert import _coalesce, _combine_values, _warn_legacy_pairs, vectors_to_csr
-
-from typing import Sequence
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike
@@ -38,7 +37,7 @@ __all__ = [
 def find_neighbors(masks: np.ndarray, i: int, r: int = 1) -> np.ndarray:
     """
     Find the neighbors of a given mask.
-    
+
     Parameters
     ----------
     masks : array_like
@@ -48,15 +47,15 @@ def find_neighbors(masks: np.ndarray, i: int, r: int = 1) -> np.ndarray:
         The mask for which we look for the neighbors.
     r : int
         Radius of search.
-        
+
     Returns
     -------
     neighbors : array
         Neighbors in the vicinity of mask `i` in masks.
     """
-    from skimage import morphology
     import cv2 as cv
-    
+    from skimage import morphology
+
     mask = np.uint8(masks == i)
     # create the border in which we'll look at other masks
     kernel = morphology.disk(r)
@@ -115,6 +114,7 @@ def _contacting_label_pairs(masks, r=1):
     entry per contacting pixel pair (duplicates included).
     """
     from skimage import morphology
+
     footprint = morphology.disk(r)
     offsets = np.argwhere(footprint) - r
 
@@ -193,13 +193,15 @@ def mask_val_coord(
         Centroid coordinates. As an array, shape is (n_labels, n_dims).
     """
     from skimage import measure
+
     props = measure.regionprops_table(masks, properties=('label', 'centroid'))
     coords = pd.DataFrame.from_dict(props)
     if coords.shape[1] == 3:
         coords.rename(columns={'centroid-1': 'x', 'centroid-0': 'y'}, inplace=True)
     elif coords.shape[1] == 4:
-        coords.rename(columns={'centroid-2': 'x', 'centroid-1': 'y', 'centroid-0': 'z'},
-                      inplace=True)
+        coords.rename(
+            columns={'centroid-2': 'x', 'centroid-1': 'y', 'centroid-0': 'z'}, inplace=True
+        )
     else:
         print('More than 3 detected spatial dimensions, check output column names.')
     coords.index = coords['label']
@@ -228,7 +230,7 @@ def build_contacting_nn(masks: np.ndarray, r: int = 1, k: int = 3) -> tuple[np.n
         Radius of search for the contacting areas method. The default is 1.
     k : int, optional
         Number of nearest neighbors. The default is 3.
-   
+
 
     Returns
     -------
@@ -245,7 +247,9 @@ def build_contacting_nn(masks: np.ndarray, r: int = 1, k: int = 3) -> tuple[np.n
     return coords, A
 
 
-def choose_optimal_image_split(im: np.ndarray, method: str = 'im_size', min_tile_size: int = 360000) -> int:
+def choose_optimal_image_split(
+    im: np.ndarray, method: str = 'im_size', min_tile_size: int = 360000
+) -> int:
     """
     Compute the optimal number of splits of an image
     to run in parallel a function of each core.
@@ -266,12 +270,12 @@ def choose_optimal_image_split(im: np.ndarray, method: str = 'im_size', min_tile
     -------
     n_splits : int
         The optimal number of splits.
-    
+
     Example
     -------
     >>> im = np.zeros((1024, 1024), dtype=np.int32)
     >>> n_splits = choose_optimal_image_split(im)
-    
+
     Notes
     -----
     One would ideally consider the number of cores, the size of the image
@@ -281,18 +285,16 @@ def choose_optimal_image_split(im: np.ndarray, method: str = 'im_size', min_tile
     The number of splits shouldn't be superior to the number of cores,
     otherwise some cores will wait for the last tiles to be processed
     by other cores, while increasing the inter-process communication
-    by too many splits. 
-    Ideally n_splits should be a power of 2 in order to split easily 
+    by too many splits.
+    Ideally n_splits should be a power of 2 in order to split easily
     the image.
     """
-    
+
     n_cores = os.cpu_count()
-    # number of segmented objects, drop the background value
-    n_obj = np.unique(im).size - 1
-    
+
     if method == 'im_size':
         # avoid too many splits if image is not so big
-        im_size = im.nbytes # slightly different from sys.getsizeof(im)
+        im_size = im.nbytes  # slightly different from sys.getsizeof(im)
         # max power of 2
         max_i = int(np.log2(n_cores)) + 1
         n_splits = 1
@@ -304,7 +306,7 @@ def choose_optimal_image_split(im: np.ndarray, method: str = 'im_size', min_tile
                 break
     elif method == 'naive':
         n_splits = n_cores
-    
+
     return n_splits
 
 
@@ -324,13 +326,13 @@ def split_range(r: int, n: int) -> list[list[int]]:
     -------
     segments : list
         The list of lists of first and last indices of segments.
-    
+
     Example
     -------
     >>> split_range(8, 2)
     [[0, 4], [4, 8]]
     """
-    
+
     step = int(r / n)
     segments = []
     for i in range(n):
@@ -354,14 +356,14 @@ def extend_indices(segments: list, margin: int) -> list[list[int]]:
         The list of lists of first and last indices of segments.
     margin : int
         The extra extend to add on each side of segments.
-    
+
     Example
     -------
     >>> segments = split_range(16, 4)
     >>> extend_indices(segments, margin=1)
     [[0, 5], [3, 9], [7, 13], [11, 16]]
     """
-    
+
     if len(segments) == 1:
         return segments
     else:
@@ -394,7 +396,7 @@ def make_tiles_limits(im: np.ndarray, n_splits: int, margin: int = 0) -> list[li
     -------
     tiles_indices : list
         The list of indices [[xmin, xmax], [ymin, ymax]] for each tile.
-        
+
     Example
     -------
     >>> im = np.arange(16 * 8).reshape(16, 8)
@@ -405,7 +407,7 @@ def make_tiles_limits(im: np.ndarray, n_splits: int, margin: int = 0) -> list[li
     >>> make_tiles_limits(im, 1)
     [[0, 8, 0, 16]]
     """
-    
+
     if n_splits <= 1:
         return [[0, im.shape[1], 0, im.shape[0]]]
     # number of splits per axis, with nx * ny == n_splits for powers of 2
@@ -413,11 +415,11 @@ def make_tiles_limits(im: np.ndarray, n_splits: int, margin: int = 0) -> list[li
     ny = max(1, n_splits // nx)
     x_segments = split_range(im.shape[1], nx)
     y_segments = split_range(im.shape[0], ny)
-    
+
     if margin > 0:
         x_segments = extend_indices(x_segments, margin=margin)
         y_segments = extend_indices(y_segments, margin=margin)
-    
+
     # make combinations of [xmin, xmax, ymin, ymax] indices of tiles
     tiles_indices = []
     for xlim in x_segments:
@@ -443,7 +445,7 @@ def extract_tile(im: np.ndarray, limits: Sequence[int]) -> np.ndarray:
     -------
     tile : array_like
         The extracted tile.
-        
+
     Example
     -------
     >>> im = np.arange(8 * 8).reshape(8, 8)
@@ -454,13 +456,18 @@ def extract_tile(im: np.ndarray, limits: Sequence[int]) -> np.ndarray:
            [52, 53, 54, 55],
            [60, 61, 62, 63]])
     """
-    
+
     # limits are [xmin, xmax, ymin, ymax], x being columns and y rows
-    tile = im[limits[2]: limits[3], limits[0]: limits[1]]
+    tile = im[limits[2] : limits[3], limits[0] : limits[1]]
     return tile
 
 
-def merge_pairs(lA: Sequence[csr_matrix | np.ndarray], weighted: bool = False, combine: str = 'max', out_dtype: DTypeLike | None = None) -> csr_matrix | np.ndarray:
+def merge_pairs(
+    lA: Sequence[csr_matrix | np.ndarray],
+    weighted: bool = False,
+    combine: str = 'max',
+    out_dtype: DTypeLike | None = None,
+) -> csr_matrix | np.ndarray:
     """
     Merge a list of networks into a single network, the union of their edges.
 
@@ -504,8 +511,9 @@ def merge_pairs(lA: Sequence[csr_matrix | np.ndarray], weighted: bool = False, c
         return np.unique(np.vstack(lA), axis=0)
     shapes = {A.shape for A in lA}
     if len(shapes) != 1:
-        raise ValueError(f"networks have different shapes: {shapes}, "
-                         "build them with the same `n_nodes`")
+        raise ValueError(
+            f"networks have different shapes: {shapes}, build them with the same `n_nodes`"
+        )
     if weighted:
         A = _coalesce(lA[0])
         for B in lA[1:]:

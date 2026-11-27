@@ -23,7 +23,7 @@ Networks are `scipy.sparse` CSR adjacency matrices:
 import tysserand as ty
 
 coords = ty.make_random_nodes(size=500, random_state=0)
-A = ty.build_delaunay(coords)          # or build_knn, build_rdn, build_lattice...
+A = ty.build_delaunay(coords)  # or build_knn, build_rdn, build_lattice...
 fig, ax = ty.plot_network(coords, A)
 ty.save_network(A, 'network.npz')
 ```

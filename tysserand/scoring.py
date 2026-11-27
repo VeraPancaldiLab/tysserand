@@ -3,12 +3,13 @@ Comparison of reconstructed networks with a ground truth.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from scipy.sparse import issparse, triu
 
 from .convert import _warn_legacy_pairs, to_undirected
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from scipy.sparse import csr_matrix
@@ -22,13 +23,13 @@ __all__ = [
 def confusion_stats(set_true: set, set_test: set) -> tuple[int, int, int]:
     """
     Count the true positives, false positives and false
-    negatives in a test set with respect to a "true" set. 
+    negatives in a test set with respect to a "true" set.
     True negatives are not counted.
     """
     true_pos = len(set_true.intersection(set_test))
     false_pos = len(set_test.difference(set_true))
     false_neg = len(set_true.difference(set_test))
-    
+
     return true_pos, false_pos, false_neg
 
 
@@ -39,7 +40,9 @@ def _pad_to_shape(A, shape):
     return A
 
 
-def score_method(A_true: csr_matrix | np.ndarray, A_test: csr_matrix | np.ndarray) -> tuple[float, float, float]:
+def score_method(
+    A_true: csr_matrix | np.ndarray, A_test: csr_matrix | np.ndarray
+) -> tuple[float, float, float]:
     """
     Compute the rates of true positives, false positives and false negatives
     of the edges of a reconstructed network with respect to a "true" network.
@@ -87,5 +90,5 @@ def score_method(A_true: csr_matrix | np.ndarray, A_test: csr_matrix | np.ndarra
     true_pos_rate = true_pos / total
     false_pos_rate = false_pos / total
     false_neg_rate = false_neg / total
-    
+
     return true_pos_rate, false_pos_rate, false_neg_rate

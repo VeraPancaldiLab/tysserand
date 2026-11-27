@@ -17,13 +17,13 @@ warnings.warn(
     stacklevel=2,
 )
 
-from .generators import *  # noqa: E402,F401,F403
-from .convert import *  # noqa: E402,F401,F403
-from .io import *  # noqa: E402,F401,F403
-from .distances import *  # noqa: E402,F401,F403
+from .annotation import *  # noqa: E402,F401,F403
 from .build import *  # noqa: E402,F401,F403
 from .contacting import *  # noqa: E402,F401,F403
+from .convert import *  # noqa: E402,F401,F403
+from .distances import *  # noqa: E402,F401,F403
+from .generators import *  # noqa: E402,F401,F403
+from .interop import *  # noqa: E402,F401,F403
+from .io import *  # noqa: E402,F401,F403
 from .plot import *  # noqa: E402,F401,F403
 from .scoring import *  # noqa: E402,F401,F403
-from .interop import *  # noqa: E402,F401,F403
-from .annotation import *  # noqa: E402,F401,F403

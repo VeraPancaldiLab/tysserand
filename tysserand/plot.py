@@ -3,16 +3,17 @@ Network plotting with matplotlib.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
+    import matplotlib.pyplot as plt
     from matplotlib.colors import Colormap
     from numpy.typing import ArrayLike
-    import matplotlib.pyplot as plt
 
 __all__ = [
     'rescale',
@@ -22,10 +23,16 @@ __all__ = [
 ]
 
 
-def rescale(data: ArrayLike, perc_mini: float = 1, perc_maxi: float = 99, 
-            out_mini: float = 0, out_maxi: float = 1, 
-            cutoff_mini: bool = True, cutoff_maxi: bool = True, 
-            return_extrema: bool = False) -> np.ndarray | tuple[np.ndarray, float, float]:
+def rescale(
+    data: ArrayLike,
+    perc_mini: float = 1,
+    perc_maxi: float = 99,
+    out_mini: float = 0,
+    out_maxi: float = 1,
+    cutoff_mini: bool = True,
+    cutoff_maxi: bool = True,
+    return_extrema: bool = False,
+) -> np.ndarray | tuple[np.ndarray, float, float]:
     """
     Normalize the intensities of a planar 2D image.
 
@@ -53,7 +60,7 @@ def rescale(data: ArrayLike, perc_mini: float = 1, perc_maxi: float = 99,
     data_out : numpy array
         the output image
     """
-    
+
     mini = np.percentile(data, perc_mini)
     maxi = np.percentile(data, perc_maxi)
     if out_mini is None:
@@ -61,12 +68,12 @@ def rescale(data: ArrayLike, perc_mini: float = 1, perc_maxi: float = 99,
     if out_maxi is None:
         out_maxi = maxi
     data_out = data - mini
-    data_out = data_out * (out_maxi-out_mini) / (maxi-mini)
+    data_out = data_out * (out_maxi - out_mini) / (maxi - mini)
     data_out = data_out + out_mini
     if cutoff_mini:
-        data_out[data_out<out_mini] = out_mini
+        data_out[data_out < out_mini] = out_mini
     if cutoff_maxi:
-        data_out[data_out>out_maxi] = out_maxi
+        data_out[data_out > out_maxi] = out_maxi
     if return_extrema:
         return data_out, mini, maxi
     else:
@@ -78,11 +85,21 @@ def plot_network(
     A: csr_matrix,
     disp_id: bool = False,
     labels: ArrayLike | None = None,
-    color_mapper: dict | None = None, show_legend: bool = True, legend_opt: dict | None = None,
-    col_nodes: str | ArrayLike | None = None, cmap_nodes: str | Colormap | list | None = None, marker: str | None = None,
-    size_nodes: float | ArrayLike | None = None, col_edges: str = 'k', alpha_edges: float = 0.5,
-    linewidth: float | None = None, skip_edges: bool = False,
-    ax: plt.Axes | None = None, figsize: tuple[float, float] = (15, 15), aspect: str = 'equal', **kwargs,
+    color_mapper: dict | None = None,
+    show_legend: bool = True,
+    legend_opt: dict | None = None,
+    col_nodes: str | ArrayLike | None = None,
+    cmap_nodes: str | Colormap | list | None = None,
+    marker: str | None = None,
+    size_nodes: float | ArrayLike | None = None,
+    col_edges: str = 'k',
+    alpha_edges: float = 0.5,
+    linewidth: float | None = None,
+    skip_edges: bool = False,
+    ax: plt.Axes | None = None,
+    figsize: tuple[float, float] = (15, 15),
+    aspect: str = 'equal',
+    **kwargs,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a network.
@@ -155,16 +172,32 @@ def plot_network(
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
-            ax.scatter(coords[select, 0], coords[select, 1], c=color, label=label,
-                       marker=marker, s=size_nodes, zorder=10, **kwargs)
+            ax.scatter(
+                coords[select, 0],
+                coords[select, 1],
+                c=color,
+                label=label,
+                marker=marker,
+                s=size_nodes,
+                zorder=10,
+                **kwargs,
+            )
         if show_legend:
             if legend_opt is None:
                 ax.legend()
             else:
                 ax.legend(**legend_opt)
     else:
-        ax.scatter(coords[:, 0], coords[:, 1], c=col_nodes, cmap=cmap_nodes,
-                   marker=marker, s=size_nodes, zorder=10, **kwargs)
+        ax.scatter(
+            coords[:, 0],
+            coords[:, 1],
+            c=col_nodes,
+            cmap=cmap_nodes,
+            marker=marker,
+            s=size_nodes,
+            zorder=10,
+            **kwargs,
+        )
     # plot edges using LineCollection
     if not skip_edges:
         rows, cols = A.nonzero()
@@ -194,10 +227,20 @@ def plot_network_distances(
     coords: np.ndarray,
     D: csr_matrix,
     labels: ArrayLike | None = None,
-    color_mapper: dict | None = None, show_legend: bool = True, legend_opt: dict | None = None,
-    col_nodes: str | ArrayLike | None = None, cmap_nodes: str | Colormap | list | None = None, marker: str | None = None, size_nodes: float | ArrayLike | None = None,
-    cmap_edges: str | Colormap = 'viridis', alpha_edges: float = 0.7, linewidth: float | None = None,
-    figsize: tuple[float, float] = (15, 15), ax: plt.Axes | None = None, aspect: str = 'equal', **kwargs,
+    color_mapper: dict | None = None,
+    show_legend: bool = True,
+    legend_opt: dict | None = None,
+    col_nodes: str | ArrayLike | None = None,
+    cmap_nodes: str | Colormap | list | None = None,
+    marker: str | None = None,
+    size_nodes: float | ArrayLike | None = None,
+    cmap_edges: str | Colormap = 'viridis',
+    alpha_edges: float = 0.7,
+    linewidth: float | None = None,
+    figsize: tuple[float, float] = (15, 15),
+    ax: plt.Axes | None = None,
+    aspect: str = 'equal',
+    **kwargs,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Plot a network with edges colored by their length.
@@ -268,16 +311,32 @@ def plot_network_distances(
         for label in uniq:
             select = labels == label
             color = color_mapper[label]
-            ax.scatter(coords[select, 0], coords[select, 1], c=color, label=label,
-                       marker=marker, s=size_nodes, zorder=10, **kwargs)
+            ax.scatter(
+                coords[select, 0],
+                coords[select, 1],
+                c=color,
+                label=label,
+                marker=marker,
+                s=size_nodes,
+                zorder=10,
+                **kwargs,
+            )
         if show_legend:
             if legend_opt is None:
                 ax.legend()
             else:
                 ax.legend(**legend_opt)
     else:
-        ax.scatter(coords[:, 0], coords[:, 1], c=col_nodes, cmap=cmap_nodes,
-                   marker=marker, s=size_nodes, zorder=10, **kwargs)
+        ax.scatter(
+            coords[:, 0],
+            coords[:, 1],
+            c=col_nodes,
+            cmap=cmap_nodes,
+            marker=marker,
+            s=size_nodes,
+            zorder=10,
+            **kwargs,
+        )
     # plot edges
     rows, cols = D.nonzero()
     # keep only upper triangle to draw each undirected edge once
@@ -307,7 +366,9 @@ def plot_network_distances(
         return fig, ax
 
 
-def showim(image: np.ndarray, figsize: tuple[float, float] = (9,9), ax: plt.Axes | None = None, **kwargs) -> tuple[plt.Figure, plt.Axes]:
+def showim(
+    image: np.ndarray, figsize: tuple[float, float] = (9, 9), ax: plt.Axes | None = None, **kwargs
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Displays an image with thigh layout and without axes.
 
@@ -327,6 +388,7 @@ def showim(image: np.ndarray, figsize: tuple[float, float] = (9,9), ax: plt.Axes
     (fig, ax)
     """
     import matplotlib.pyplot as plt
+
     if ax is None:
         return_ax = True
         fig, ax = plt.subplots(figsize=figsize)

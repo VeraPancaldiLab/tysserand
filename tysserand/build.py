@@ -3,9 +3,10 @@ Network reconstruction from node coordinates.
 """
 
 from __future__ import annotations
+
 import numpy as np
-from scipy.spatial import Voronoi
 from scipy.sparse import csr_matrix
+from scipy.spatial import Voronoi
 
 from .convert import _coalesce, to_undirected, vectors_to_csr
 from .distances import distance_neighbors, find_trim_dist
@@ -149,8 +150,9 @@ def build_knn(
     >>> coords = make_simple_coords()
     >>> A = build_knn(coords)
     """
-    from sklearn.neighbors import BallTree
     import pynndescent
+    from sklearn.neighbors import BallTree
+
     if len(coords) < 3000 or not approximate:
         tree = BallTree(coords, **kwargs)
         _, neighbors = tree.query(coords, k=k + 1)  # first neighbor is oneself
@@ -158,7 +160,7 @@ def build_knn(
         n_index = min(k, len(coords))
         # compiles pynndescent's numba functions on a tiny dataset
         warmup_coords = np.random.default_rng(0).random(size=(n_index + 2, coords.shape[1]))
-        warmup_index = pynndescent.NNDescent(
+        pynndescent.NNDescent(
             warmup_coords,
             metric=metric,
             n_neighbors=n_index + 1,
@@ -172,7 +174,7 @@ def build_knn(
             random_state=random_state,
         )
         neighbors = index.neighbor_graph[0]
-    
+
     # convert from BallTree query format to CSR matrix
     n_nodes = neighbors.shape[0]
     src = np.repeat(neighbors[:, 0], k)
@@ -222,6 +224,7 @@ def build_rdn(
     >>> A = build_rdn(coords, r=60)
     """
     from sklearn.neighbors import BallTree
+
     tree = BallTree(coords, **kwargs)
     if coords_ref is None:
         query_coords = coords
@@ -294,6 +297,7 @@ def build_lattice(
     >>> A = build_lattice(coords)
     """
     from sklearn.neighbors import BallTree
+
     tree = BallTree(coords, **kwargs)
     if r is None:
         # derive minimum inter-node distance from nearest neighbor distances
@@ -317,7 +321,8 @@ def link_solitaries(
     min_neighbors: int = 3,
     all_pairs: np.ndarray | None = None,
     all_dist: np.ndarray | None = None,
-    verbose: int = 1) -> csr_matrix:
+    verbose: int = 1,
+) -> csr_matrix:
     """
     Detect nodes that are not connected (or under-connected) and link them to
     other nodes, returning an updated CSR adjacency matrix.
@@ -390,8 +395,10 @@ def link_solitaries(
             if all_dist is None:
                 all_dist = distance_neighbors(coords, all_pairs)
             for node_id in solitaries:
-                cand = all_pairs.indices[all_pairs.indptr[node_id]:all_pairs.indptr[node_id + 1]]
-                node_distances = all_dist.data[all_dist.indptr[node_id]:all_dist.indptr[node_id + 1]]
+                cand = all_pairs.indices[all_pairs.indptr[node_id] : all_pairs.indptr[node_id + 1]]
+                node_distances = all_dist.data[
+                    all_dist.indptr[node_id] : all_dist.indptr[node_id + 1]
+                ]
                 if len(node_distances) >= min_neighbors:
                     keep = np.argsort(node_distances)[:min_neighbors]
                     for j in cand[keep]:
@@ -399,7 +406,7 @@ def link_solitaries(
         elif method == 'knn':
             nn_A = build_knn(coords, k=min_neighbors)
             for i in solitaries:
-                for j in nn_A.indices[nn_A.indptr[i]:nn_A.indptr[i + 1]]:
+                for j in nn_A.indices[nn_A.indptr[i] : nn_A.indptr[i + 1]]:
                     new_pairs.append((i, int(j)))
 
         if len(new_pairs) > 0:

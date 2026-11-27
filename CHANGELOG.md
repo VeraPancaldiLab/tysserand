@@ -21,6 +21,9 @@
   - heavy libraries (napari, OpenCV, scikit-image, scikit-learn, pynndescent, matplotlib, seaborn) are imported only when used: `import tysserand` drops from ~1.4 s / ~360 MB to ~0.3 s / ~130 MB
   - `build_contacting_parallel` uses joblib instead of Dask (Dask is no longer a dependency) and returns a CSR adjacency matrix identical to `build_contacting`
 
+### Development
+  - code linted and formatted with ruff (`uv run ruff check .`, `uv run ruff format .`), pre-commit hooks (`uv run pre-commit install`) and GitHub Actions running the linters, the tests (Python 3.10 and 3.12) and the documentation build
+
 ### Deprecated
   - `from tysserand import tysserand as ty`: use `import tysserand as ty`; the `tysserand.tysserand` module still re-exports the whole API but emits a `FutureWarning` and will be removed in a future release
 
@@ -30,6 +33,7 @@
   - tiling of `build_contacting_parallel` (1 or 2 splits, non power-of-4 splits, non-square images)
   - `build_contacting_nn` with CSR networks
   - `add_to_AnnData` failing when distances `D` are not provided
+  - `choose_optimal_image_split` no longer computes the unused number of objects of the whole image
   - `build_contacting` silently dropped edges between objects sharing many contacting pixels (int8 overflow when summing duplicate contacts)
 
 ## v0.6.0

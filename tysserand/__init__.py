@@ -33,13 +33,13 @@ pynndescent, matplotlib, seaborn...) are imported inside the functions that
 use them, so that importing tysserand stays light, also in parallel workers.
 """
 
-from .generators import *
-from .convert import *
-from .io import *
-from .distances import *
+from .annotation import *
 from .build import *
 from .contacting import *
+from .convert import *
+from .distances import *
+from .generators import *
+from .interop import *
+from .io import *
 from .plot import *
 from .scoring import *
-from .interop import *
-from .annotation import *

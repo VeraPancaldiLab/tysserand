@@ -1,5 +1,6 @@
 """Tests of the CSR network representation: reconstruction methods, conversions,
 IO and the CSR ports of the former edge-list functions."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,12 +28,16 @@ def coords():
 
 # ------ reconstruction ------
 
-@pytest.mark.parametrize("build", [
-    lambda c: ty.build_delaunay(c),
-    lambda c: ty.build_delaunay(c, node_adaptive_trimming=True),
-    lambda c: ty.build_knn(c, k=5),
-    lambda c: ty.build_rdn(c, r=0.1),
-])
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda c: ty.build_delaunay(c),
+        lambda c: ty.build_delaunay(c, node_adaptive_trimming=True),
+        lambda c: ty.build_knn(c, k=5),
+        lambda c: ty.build_rdn(c, r=0.1),
+    ],
+)
 def test_build_returns_symmetric_csr(coords, build):
     A = build(coords)
     assert_symmetric_binary(A, len(coords))
@@ -67,6 +72,7 @@ def test_build_delaunay_return_dist(coords):
 
 # ------ conversions ------
 
+
 def test_vectors_csr_roundtrip():
     pairs = np.array([[0, 1], [1, 2], [0, 3]])
     A = ty.vectors_to_csr(pairs, n_nodes=5)  # node 4 is isolated
@@ -78,7 +84,7 @@ def test_vectors_csr_roundtrip():
 
 
 def test_distance_neighbors():
-    coords = np.array([[0., 0.], [3., 4.], [0., 1.]])
+    coords = np.array([[0.0, 0.0], [3.0, 4.0], [0.0, 1.0]])
     A = ty.vectors_to_csr(np.array([[0, 1], [0, 2]]))
     D = ty.distance_neighbors(coords, A)
     assert D[0, 1] == pytest.approx(5) and D[1, 0] == pytest.approx(5)
@@ -96,15 +102,18 @@ def test_attributes_to_matrix():
 def directed_weighted():
     # 0 -> 1 (0.5), 1 -> 0 (2.), 1 -> 2 (3.), 3 -> 2 (4.)
     rows, cols = np.array([0, 1, 1, 3]), np.array([1, 0, 2, 2])
-    return csr_matrix((np.array([0.5, 2., 3., 4.]), (rows, cols)), shape=(4, 4))
+    return csr_matrix((np.array([0.5, 2.0, 3.0, 4.0]), (rows, cols)), shape=(4, 4))
 
 
-@pytest.mark.parametrize("build", [
-    lambda c: ty.build_delaunay(c),
-    lambda c: ty.build_delaunay(c, node_adaptive_trimming=True),
-    lambda c: ty.build_knn(c, k=6),
-    lambda c: ty.build_rdn(c, r=0.1),
-])
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda c: ty.build_delaunay(c),
+        lambda c: ty.build_delaunay(c, node_adaptive_trimming=True),
+        lambda c: ty.build_knn(c, k=6),
+        lambda c: ty.build_rdn(c, r=0.1),
+    ],
+)
 def test_built_networks_are_already_undirected(coords, build):
     # networks built by tysserand need no deduplication nor symmetrization
     A = build(coords)
@@ -179,7 +188,7 @@ def test_merge_pairs_keeps_directions():
 
 def test_merge_pairs_weighted():
     A1 = directed_weighted()
-    A2 = csr_matrix((np.array([1., 5.]), (np.array([0, 2]), np.array([1, 3]))), shape=(4, 4))
+    A2 = csr_matrix((np.array([1.0, 5.0]), (np.array([0, 2]), np.array([1, 3]))), shape=(4, 4))
     A = ty.merge_pairs([A1, A2], weighted=True)
     assert A[0, 1] == 1 and A[1, 0] == 2 and A[2, 3] == 5 and A[3, 2] == 4
     assert ty.is_directed(A)
@@ -194,7 +203,7 @@ def test_pairs_to_df_csr():
     edges = ty.pairs_to_df(A)
     assert edges.columns.tolist() == ['source', 'target']
     assert edges.values.tolist() == [[0, 1], [0, 3], [1, 2]]
-    D = ty.distance_neighbors(np.array([[0., 0], [1, 0], [1, 2], [0, 3]]), A)
+    D = ty.distance_neighbors(np.array([[0.0, 0], [1, 0], [1, 2], [0, 3]]), A)
     edges = ty.pairs_to_df(D, columns=['i', 'j'], weight='distance')
     assert edges['distance'].tolist() == pytest.approx([1, 3, 2])
 
@@ -213,9 +222,10 @@ def test_pairs_to_df_directed():
 
 
 def test_pairs_to_df_self_loops():
-    A = csr_matrix((np.ones(3, dtype=np.int8), (np.array([0, 0, 1]), np.array([0, 1, 0]))), shape=(2, 2))
+    A = csr_matrix(
+        (np.ones(3, dtype=np.int8), (np.array([0, 0, 1]), np.array([0, 1, 0]))), shape=(2, 2)
+    )
     assert ty.pairs_to_df(A).values.tolist() == [[0, 0], [0, 1]]
-
 
 
 def test_csr_to_edge_pairs_directed():
@@ -236,7 +246,7 @@ def test_csr_to_edge_pairs_duplicates_and_self_loops():
     data = np.array([1, 1, 1, 1, 1, 0], dtype=np.int8)
     A = csr_matrix((data, (rows, cols)), shape=(3, 3))
     assert ty.csr_to_edge_pairs(A).tolist() == [[0, 1], [2, 2]]
-    coords = np.array([[0., 0], [1, 0], [2, 0]])
+    coords = np.array([[0.0, 0], [1, 0], [2, 0]])
     edges_coords = ty.csr_to_edge_coords(coords, A)  # self-loop not drawable
     assert len(edges_coords) == 1 and edges_coords[0].tolist() == [[0, 0], [1, 0]]
 
@@ -248,12 +258,15 @@ def test_score_method_csr():
     assert ty.score_method(A_true, A_true) == (1, 0, 0)
 
 
-@pytest.mark.parametrize("fct, args", [
-    (ty.remove_duplicate_pairs, ([[4, 3], [1, 2], [3, 4], [2, 1]],)),
-    (ty.merge_pairs, ([np.array([[0, 1]]), np.array([[0, 1], [2, 3]])],)),
-    (ty.pairs_to_df, (np.array([[0, 1], [1, 2]]),)),
-    (ty.score_method, (np.array([[3, 4], [5, 6]]), np.array([[3, 4]]))),
-])
+@pytest.mark.parametrize(
+    "fct, args",
+    [
+        (ty.remove_duplicate_pairs, ([[4, 3], [1, 2], [3, 4], [2, 1]],)),
+        (ty.merge_pairs, ([np.array([[0, 1]]), np.array([[0, 1], [2, 3]])],)),
+        (ty.pairs_to_df, (np.array([[0, 1], [1, 2]]),)),
+        (ty.score_method, (np.array([[3, 4], [5, 6]]), np.array([[3, 4]]))),
+    ],
+)
 def test_edge_list_input_is_deprecated(fct, args):
     with pytest.deprecated_call():
         fct(*args)
@@ -261,18 +274,23 @@ def test_edge_list_input_is_deprecated(fct, args):
 
 def test_legacy_edge_list_results():
     with pytest.deprecated_call():
-        assert ty.remove_duplicate_pairs([[4, 3], [1, 2], [3, 4], [2, 1]]).tolist() == [[1, 2], [3, 4]]
+        assert ty.remove_duplicate_pairs([[4, 3], [1, 2], [3, 4], [2, 1]]).tolist() == [
+            [1, 2],
+            [3, 4],
+        ]
     with pytest.deprecated_call():
-        assert ty.score_method(np.array([[3, 4], [5, 6], [7, 8]]),
-                               np.array([[1, 2], [3, 4], [5, 6]])) == (0.5, 0.25, 0.25)
+        assert ty.score_method(
+            np.array([[3, 4], [5, 6], [7, 8]]), np.array([[1, 2], [3, 4], [5, 6]])
+        ) == (0.5, 0.25, 0.25)
 
 
 # ------ link_solitaries ------
 
+
 @pytest.mark.parametrize("method", ["knn", "delaunay"])
 def test_link_solitaries(method):
     # 5 collinear nodes; only 0-1 linked, nodes 2, 3 and 4 are solitary
-    coords = np.array([[0., 0], [1, 0], [2, 0], [3.1, 0], [4, 0.1]])
+    coords = np.array([[0.0, 0], [1, 0], [2, 0], [3.1, 0], [4, 0.1]])
     A = ty.vectors_to_csr(np.array([[0, 1]]), n_nodes=5)
     B = ty.link_solitaries(coords, A, method=method, min_neighbors=1, verbose=0)
     assert_symmetric_binary(B, 5)
@@ -282,7 +300,7 @@ def test_link_solitaries(method):
 
 def test_link_solitaries_missing_trailing_nodes():
     # A built without n_nodes: trailing isolated nodes are not in the matrix
-    coords = np.array([[0., 0], [1, 0], [2, 0], [3, 0]])
+    coords = np.array([[0.0, 0], [1, 0], [2, 0], [3, 0]])
     A = ty.vectors_to_csr(np.array([[0, 1]]))
     B = ty.link_solitaries(coords, A, method='knn', min_neighbors=1, verbose=0)
     assert B.shape == (4, 4)
@@ -297,9 +315,8 @@ def test_link_solitaries_min_neighbors():
     assert edge_set(A) <= edge_set(B)
 
 
-
 def test_link_solitaries_keeps_directions_and_weights():
-    coords = np.array([[0., 0], [1, 0], [2, 0], [3.1, 0], [4, 0.1]])
+    coords = np.array([[0.0, 0], [1, 0], [2, 0], [3.1, 0], [4, 0.1]])
     # directed, weighted edge 1 -> 0: nodes 0 and 1 aren't solitary
     A = csr_matrix((np.array([0.5]), (np.array([1]), np.array([0]))), shape=(5, 5))
     B = ty.link_solitaries(coords, A, method='knn', min_neighbors=1, verbose=0)
@@ -316,13 +333,14 @@ def test_link_solitaries_keeps_directions_and_weights():
 
 def test_link_solitaries_existing_edge_not_doubled():
     # node 1 has 1 neighbor and needs 2: its nearest neighbor 0 is already linked
-    coords = np.array([[0., 0], [1, 0], [3, 0]])
+    coords = np.array([[0.0, 0], [1, 0], [3, 0]])
     A = ty.vectors_to_csr(np.array([[0, 1]]), n_nodes=3)
     B = ty.link_solitaries(coords, A, method='knn', min_neighbors=2, verbose=0)
     assert_symmetric_binary(B, 3)
 
 
 # ------ IO ------
+
 
 def test_save_load_roundtrip(tmp_path, coords):
     A = ty.build_delaunay(coords)
@@ -357,17 +375,26 @@ def test_migrate_edges_to_npz(tmp_path, extension):
 
 # ------ reproducibility ------
 
+
 def test_generators_random_state():
-    np.testing.assert_array_equal(ty.make_random_nodes(size=20, random_state=5),
-                                  ty.make_random_nodes(size=20, random_state=5))
-    assert not np.array_equal(ty.make_random_nodes(size=20, random_state=5),
-                              ty.make_random_nodes(size=20, random_state=6))
+    np.testing.assert_array_equal(
+        ty.make_random_nodes(size=20, random_state=5), ty.make_random_nodes(size=20, random_state=5)
+    )
+    assert not np.array_equal(
+        ty.make_random_nodes(size=20, random_state=5), ty.make_random_nodes(size=20, random_state=6)
+    )
     rng = np.random.default_rng(0)
-    assert not np.array_equal(ty.make_random_nodes(size=20, random_state=rng),
-                              ty.make_random_nodes(size=20, random_state=rng))
+    assert not np.array_equal(
+        ty.make_random_nodes(size=20, random_state=rng),
+        ty.make_random_nodes(size=20, random_state=rng),
+    )
     state = np.random.get_state()
-    c1, m1 = ty.make_random_tiles(sx=60, sy=60, nb=8, regular=False, noise_sigma=2.0, random_state=3)
-    c2, m2 = ty.make_random_tiles(sx=60, sy=60, nb=8, regular=False, noise_sigma=2.0, random_state=3)
+    c1, m1 = ty.make_random_tiles(
+        sx=60, sy=60, nb=8, regular=False, noise_sigma=2.0, random_state=3
+    )
+    c2, m2 = ty.make_random_tiles(
+        sx=60, sy=60, nb=8, regular=False, noise_sigma=2.0, random_state=3
+    )
     np.testing.assert_array_equal(c1, c2)
     np.testing.assert_array_equal(m1, m2)
     # numpy's global random state is left untouched

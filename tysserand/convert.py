@@ -4,18 +4,16 @@ DataFrames) and attribute helpers.
 """
 
 from __future__ import annotations
+
 import warnings
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, issparse, triu
 
-from typing import Sequence
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from numpy.typing import ArrayLike
-    from numpy.typing import DTypeLike
+    from numpy.typing import ArrayLike, DTypeLike
 
 __all__ = [
     'is_directed',
@@ -38,7 +36,9 @@ def _warn_legacy_pairs(fct_name):
     warnings.warn(
         f"`{fct_name}` with edge-list arrays is deprecated, pass CSR adjacency "
         "matrices instead (see `vectors_to_csr` to convert edge pairs).",
-        DeprecationWarning, stacklevel=3)
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 
 def _combine_values(A, B, combine):
@@ -66,7 +66,9 @@ def is_directed(A: csr_matrix) -> bool:
     return (A != A.T).nnz > 0
 
 
-def to_undirected(A: csr_matrix, weighted: bool = False, combine: str = 'max', out_dtype: DTypeLike | None = None) -> csr_matrix:
+def to_undirected(
+    A: csr_matrix, weighted: bool = False, combine: str = 'max', out_dtype: DTypeLike | None = None
+) -> csr_matrix:
     """
     Convert a network to an undirected (symmetric) network.
 
@@ -113,7 +115,9 @@ def to_undirected(A: csr_matrix, weighted: bool = False, combine: str = 'max', o
     return A.astype(np.int8 if out_dtype is None else out_dtype)
 
 
-def remove_duplicate_pairs(A: csr_matrix | np.ndarray, out_dtype: DTypeLike = np.int8) -> csr_matrix | np.ndarray:
+def remove_duplicate_pairs(
+    A: csr_matrix | np.ndarray, out_dtype: DTypeLike = np.int8
+) -> csr_matrix | np.ndarray:
     """
     Deprecated, use :func:`to_undirected`.
 
@@ -139,7 +143,9 @@ def remove_duplicate_pairs(A: csr_matrix | np.ndarray, out_dtype: DTypeLike = np
     warnings.warn(
         "`remove_duplicate_pairs` is deprecated, use `to_undirected` instead "
         "(CSR networks built by tysserand have no duplicate edges).",
-        DeprecationWarning, stacklevel=2)
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return to_undirected(A, out_dtype=out_dtype)
 
 
@@ -304,7 +310,7 @@ def categorical_to_integer(l: ArrayLike) -> np.ndarray:
 
 
 def flatten_categories(nodes: pd.DataFrame, att: list[str]) -> pd.Series:
-    # the reverse operation is 
+    # the reverse operation is
     # nodes = nodes.join(pd.get_dummies(nodes['nodes_class']))
     return nodes.loc[:, att].idxmax(axis=1)
 
@@ -333,13 +339,18 @@ def coords_to_df(coords: np.ndarray, columns: Sequence[str] | None = None) -> pd
         elif nb_dim == 3:
             columns = ['x', 'y', 'z']
         else:
-            columns = ['x'+str(i) for i in range(nb_dim)]
-    
+            columns = ['x' + str(i) for i in range(nb_dim)]
+
     nodes = pd.DataFrame(data=coords, columns=columns)
     return nodes
 
 
-def pairs_to_df(A: csr_matrix | np.ndarray, columns: Sequence[str] = ('source', 'target'), weight: str | None = None, directed: bool | None = None) -> pd.DataFrame:
+def pairs_to_df(
+    A: csr_matrix | np.ndarray,
+    columns: Sequence[str] = ('source', 'target'),
+    weight: str | None = None,
+    directed: bool | None = None,
+) -> pd.DataFrame:
     """
     Convert a network into a dataframe of edges.
 
@@ -411,7 +422,7 @@ def double_sort(data: np.ndarray, last_var: int = 0) -> np.ndarray:
     -------
     data : 2D array
         Sorted data.
-        
+
     Examples
     --------
     >>> pairs = np.array([[4,3],
@@ -422,12 +433,12 @@ def double_sort(data: np.ndarray, last_var: int = 0) -> np.ndarray:
            [3, 4],
            [5, 6]])
     """
-    
+
     # doing simply np.sort(np.sort(pairs, axis=1), axis=0)
     # would uncouple first and second elements of pairs
     # during the second sorting (axis=0)
     data = np.sort(data, axis=1)
     x_sort = np.argsort(data[:, 0])
     data = data[x_sort]
-    
+
     return data

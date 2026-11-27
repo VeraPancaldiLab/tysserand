@@ -1,4 +1,5 @@
 """Tests of the contacting-areas network reconstruction (sequential and tiled)."""
+
 from unittest import mock
 
 import numpy as np
@@ -60,7 +61,11 @@ def test_make_tiles_limits():
     assert ty.make_tiles_limits(im, 1) == [[0, 8, 0, 16]]
     assert ty.make_tiles_limits(im, 2) == [[0, 4, 0, 16], [4, 8, 0, 16]]
     assert ty.make_tiles_limits(im, 4, margin=1) == [
-        [0, 5, 0, 9], [0, 5, 7, 16], [3, 8, 0, 9], [3, 8, 7, 16]]
+        [0, 5, 0, 9],
+        [0, 5, 7, 16],
+        [3, 8, 0, 9],
+        [3, 8, 7, 16],
+    ]
     assert len(ty.make_tiles_limits(im, 8)) == 8
     # limits are [xmin, xmax, ymin, ymax], x = columns, y = rows
     tile = ty.extract_tile(im, [0, 4, 8, 16])

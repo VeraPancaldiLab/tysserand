@@ -49,7 +49,15 @@ notebooks = [
 all = ["tysserand[napari,interop,notebooks]"]
 
 [dependency-groups]
-dev = ["pytest", "pyarrow", "networkx", "igraph", "anndata"]
+dev = [
+    "pytest",
+    "pyarrow",
+    "networkx",
+    "igraph",
+    "anndata",
+    "ruff>=0.17.6",
+    "pre-commit>=4.6.2",
+]
 docs = [
     "mkdocs<2",
     "mkdocs-material>=9.7.7",
@@ -63,3 +71,26 @@ Paper = "https://doi.org/10.1093/bioinformatics/btab490"
 
 [tool.setuptools.packages.find]
 include = ["tysserand*"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["examples", "_wip", "build"]
+
+[tool.ruff.format]
+# keep the existing mix of quotes instead of rewriting every string
+quote-style = "preserve"
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle errors, bugbear and sorted imports
+select = ["E4", "E7", "E9", "F", "B", "I"]
+# zip(strict=...) everywhere would be noise; short names like `l` are used in loops
+ignore = ["B905", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# the package namespace re-exports the public API of submodules
+"*/__init__.py" = ["F401", "F403"]
+"tysserand/tysserand.py" = ["F401", "F403"]
+"tests/*" = ["E731"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tysserand"]
