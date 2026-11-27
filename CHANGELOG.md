@@ -5,6 +5,7 @@
 ### Added
   - `to_undirected(A, weighted=False, combine='max')`: symmetrize a network, binary or keeping edge values
   - `is_directed(A)`: whether an adjacency matrix is asymmetric
+  - `random_state` argument of `make_random_nodes`, `make_random_tiles` and `build_knn` (approximate search) for reproducible results; they no longer use numpy's global random state
 
 ### Changed
   - `remove_duplicate_pairs`, `merge_pairs`, `pairs_to_df` and `score_method` take CSR adjacency matrices; edge-list arrays are deprecated (`DeprecationWarning`)

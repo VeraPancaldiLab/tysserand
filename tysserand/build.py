@@ -109,6 +109,7 @@ def build_knn(
     metric: str = 'euclidean',
     n_jobs: int = -1,
     undirected: bool = True,
+    random_state=None,
     **kwargs,
 ) -> csr_matrix:
     """
@@ -131,6 +132,10 @@ def build_knn(
         The number of parallel jobs to run for neighbors index construction.
         ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
         ``-1`` means using all processors.
+    random_state : None, int or numpy.random.RandomState, optional
+        Seed of the approximate neighbors search (pynndescent, networks >= 3000
+        nodes). An int gives reproducible networks, but disables some of
+        pynndescent's parallelism. The default is None.
 
     Returns
     -------
@@ -149,7 +154,8 @@ def build_knn(
         _, neighbors = tree.query(coords, k=k + 1)  # first neighbor is oneself
     else:
         n_index = min(k, len(coords))
-        warmup_coords = np.random.random(size=(n_index + 2, coords.shape[1]))
+        # compiles pynndescent's numba functions on a tiny dataset
+        warmup_coords = np.random.default_rng(0).random(size=(n_index + 2, coords.shape[1]))
         warmup_index = pynndescent.NNDescent(
             warmup_coords,
             metric=metric,
@@ -161,6 +167,7 @@ def build_knn(
             metric=metric,
             n_neighbors=n_index + 1,
             n_jobs=n_jobs,
+            random_state=random_state,
         )
         neighbors = index.neighbor_graph[0]
     

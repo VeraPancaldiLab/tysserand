@@ -26,7 +26,7 @@ def make_simple_coords():
     return coords
 
 
-def make_random_nodes(size=100, ndim=2, expand=True):
+def make_random_nodes(size=100, ndim=2, expand=True, random_state=None):
     """
     Make a random set of nodes
 
@@ -40,14 +40,17 @@ def make_random_nodes(size=100, ndim=2, expand=True):
         If True, positions are multiplied by size**(1/ndim) in order to have a 
         consistent spacing across various `size` and `ndim` values. 
         The default is True.
+    random_state : None, int or numpy.random.Generator, optional
+        Seed or generator of the random positions, see
+        :func:`numpy.random.default_rng`. The default is None.
 
     Returns
     -------
     coords : ndarray
         Coordinates of the set of nodes.
     """
-    
-    coords = np.random.random(size=size*ndim).reshape((-1,ndim))
+    rng = np.random.default_rng(random_state)
+    coords = rng.random(size=size*ndim).reshape((-1,ndim))
     if expand:
         coords = coords * size**(1/ndim)
     return coords
@@ -55,7 +58,7 @@ def make_random_nodes(size=100, ndim=2, expand=True):
 
 def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
                       regular=True, double_pattern_y=False, double_pattern_z=False, 
-                      assym_y=True, assym_z=True, return_image=False):
+                      assym_y=True, assym_z=True, return_image=False, random_state=None):
     """
     Build contacting areas similar to cell segmentation in tissues.
 
@@ -81,6 +84,9 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
         If True the frenquency of seeds is twice higher on the y-axis. The default is True.
     return_image : bool, optional
         If True the image of seed points is also returned. The default is False.
+    random_state : None, int or numpy.random.Generator, optional
+        Seed or generator of the random positions, see
+        :func:`numpy.random.default_rng`. The default is None.
 
     Returns
     -------
@@ -98,6 +104,7 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
 
     """
     from skimage import segmentation
+    rng = np.random.default_rng(random_state)
     
     if sz == 0:
         image = np.zeros((sy, sx))
@@ -115,15 +122,15 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
             x_id = np.tile(x, y.size//2)
             y_id = np.repeat(y, x.size//2)
         else:
-            x_id = np.random.randint(sx, size=nb)
-            y_id = np.random.randint(sy, size=nb)
+            x_id = rng.integers(sx, size=nb)
+            y_id = rng.integers(sy, size=nb)
             
         if noise_sigma is not None:
-            x_id = x_id + np.random.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
+            x_id = x_id + rng.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
             x_id[x_id<0] = 0
             x_id[x_id>sx-1] = sx-1
             x_id = np.round(x_id).astype(int)
-            y_id = y_id + np.random.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
+            y_id = y_id + rng.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
             y_id[y_id<0] = 0
             y_id[y_id>sy-1] = sy-1
             y_id = np.round(y_id).astype(int)
@@ -154,26 +161,26 @@ def make_random_tiles(sx=500, sy=500, sz=0, nb=50, noise_sigma=None,
             y_id = np.repeat(y, x.size//2)
             z_id = np.repeat(z, x.size//2)
         else:
-            x_id = np.random.randint(sx, size=nb)
-            y_id = np.random.randint(sy, size=nb)
-            z_id = np.random.randint(sz, size=nb)
+            x_id = rng.integers(sx, size=nb)
+            y_id = rng.integers(sy, size=nb)
+            z_id = rng.integers(sz, size=nb)
             
         if noise_sigma is None:
             print("For 3D simulations noise_sigma needs to be > 0")
             print("Setting noise_sigma to 1")
             noise_sigma = 1
         # x
-        x_id = x_id + np.random.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
+        x_id = x_id + rng.normal(loc=0.0, scale=noise_sigma, size=x_id.size)
         x_id[x_id<0] = 0
         x_id[x_id>sx-1] = sx-1
         x_id = np.round(x_id).astype(int)
         # y
-        y_id = y_id + np.random.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
+        y_id = y_id + rng.normal(loc=0.0, scale=noise_sigma, size=y_id.size)
         y_id[y_id<0] = 0
         y_id[y_id>sy-1] = sy-1
         y_id = np.round(y_id).astype(int)
         # z
-        z_id = z_id + np.random.normal(loc=0.0, scale=noise_sigma, size=z_id.size)
+        z_id = z_id + rng.normal(loc=0.0, scale=noise_sigma, size=z_id.size)
         z_id[z_id<0] = 0
         z_id[z_id>sz-1] = sz-1
         z_id = np.round(z_id).astype(int)

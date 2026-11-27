@@ -22,7 +22,7 @@ def assert_symmetric_binary(A, n_nodes):
 
 @pytest.fixture(scope="module")
 def coords():
-    return ty.make_random_nodes(size=200, ndim=2)
+    return ty.make_random_nodes(size=200, ndim=2, random_state=0)
 
 
 # ------ reconstruction ------
@@ -41,7 +41,7 @@ def test_build_returns_symmetric_csr(coords, build):
 
 
 def test_build_3d():
-    coords = ty.make_random_nodes(size=100, ndim=3)
+    coords = ty.make_random_nodes(size=100, ndim=3, random_state=1)
     assert_symmetric_binary(ty.build_delaunay(coords), len(coords))
 
 
@@ -290,7 +290,7 @@ def test_link_solitaries_missing_trailing_nodes():
 
 
 def test_link_solitaries_min_neighbors():
-    coords = ty.make_random_nodes(size=50, ndim=2)
+    coords = ty.make_random_nodes(size=50, ndim=2, random_state=2)
     A = ty.build_delaunay(coords)
     B = ty.link_solitaries(coords, A, method='knn', min_neighbors=4, verbose=0)
     assert np.diff(B.indptr).min() >= 4
@@ -337,7 +337,7 @@ def test_save_load_roundtrip(tmp_path, coords):
 def test_migrate_edges_to_npz(tmp_path, extension):
     if extension == "parquet":
         pytest.importorskip("pyarrow")
-    coords = ty.make_random_nodes(size=30, ndim=2)
+    coords = ty.make_random_nodes(size=30, ndim=2, random_state=3)
     # the last node is isolated: n_nodes must come from the nodes file
     A = ty.build_delaunay(coords[:-1])
     A.resize((30, 30))
@@ -353,3 +353,29 @@ def test_migrate_edges_to_npz(tmp_path, extension):
     B = ty.load_network(tmp_path / "edges_patient-1_sample-1.npz")
     assert B.shape == (len(nodes), len(nodes))
     assert (B != A).nnz == 0
+
+
+# ------ reproducibility ------
+
+def test_generators_random_state():
+    np.testing.assert_array_equal(ty.make_random_nodes(size=20, random_state=5),
+                                  ty.make_random_nodes(size=20, random_state=5))
+    assert not np.array_equal(ty.make_random_nodes(size=20, random_state=5),
+                              ty.make_random_nodes(size=20, random_state=6))
+    rng = np.random.default_rng(0)
+    assert not np.array_equal(ty.make_random_nodes(size=20, random_state=rng),
+                              ty.make_random_nodes(size=20, random_state=rng))
+    state = np.random.get_state()
+    c1, m1 = ty.make_random_tiles(sx=60, sy=60, nb=8, regular=False, noise_sigma=2.0, random_state=3)
+    c2, m2 = ty.make_random_tiles(sx=60, sy=60, nb=8, regular=False, noise_sigma=2.0, random_state=3)
+    np.testing.assert_array_equal(c1, c2)
+    np.testing.assert_array_equal(m1, m2)
+    # numpy's global random state is left untouched
+    assert np.array_equal(state[1], np.random.get_state()[1])
+
+
+def test_build_knn_approximate_random_state():
+    coords = ty.make_random_nodes(size=3500, ndim=2, random_state=0)
+    A1 = ty.build_knn(coords, k=5, random_state=42)
+    A2 = ty.build_knn(coords, k=5, random_state=42)
+    assert (A1 != A2).nnz == 0

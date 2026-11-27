@@ -11,8 +11,7 @@ from tysserand import contacting
 @pytest.fixture(scope="module", params=[(600, 600, 12), (300, 500, 10), (700, 200, 8)])
 def masks(request):
     sx, sy, nb = request.param
-    np.random.seed(1)
-    _, masks = ty.make_random_tiles(sx=sx, sy=sy, nb=nb, noise_sigma=10.0)
+    _, masks = ty.make_random_tiles(sx=sx, sy=sy, nb=nb, noise_sigma=10.0, random_state=1)
     return masks.astype(np.int32)
 
 
