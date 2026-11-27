@@ -6,7 +6,8 @@ Fast and accurate spatial networks reconstruction.
 
 *tysserand* is a Python library to reconstruct spatial networks from spatially resolved omics experiments. It is intended as a common tool where the bioinformatics community can add new methods to reconstruct networks, choose appropriate parameters, clean resulting networks and pipe data to other libraries.  
 You can find the article and supplementary information on [Bioinformatics](https://doi.org/10.1093/bioinformatics/btab490), and the freely available preprint (same text!) is on [BioRxiv](https://www.biorxiv.org/content/10.1101/2020.11.16.385377v2).  
-A turorial is available [here](./examples/02-tutorial.ipynb)
+A tutorial is available [here](./examples/02-tutorial.ipynb).  
+📖 **Documentation:** [tysserand.readthedocs.io](https://tysserand.readthedocs.io) · 📝 [Changelog](https://github.com/VeraPancaldiLab/tysserand/blob/main/CHANGELOG.md)
 
 *tysserand* is fast: it is 50 to more than 120 times faster than PySAL.  
 *tysserand* is accurate: it implements the best performing methods, tested on simulated and real bioimages.
@@ -24,28 +25,19 @@ If you want the latest features not published on PyPI run
 pip install git+https://github.com/VeraPancaldiLab/tysserand.git
 ```
 
-It is best practice to create a dedicated environment for each project.
-To do it with pyenv:
+Optional dependencies are grouped in extras: `napari` (interactive visualization and annotation), `interop` (NetworkX, iGraph and AnnData bridges), `notebooks` (Jupyter tutorials and publication figures, including PySAL), or `all`:
 ```bash
-# create environment
-pyenv install 3.10.13
-pyenv virtualenv 3.10.13 spatial-networks
-# add environment to jupyterlab
-pyenv activate spatial-networks
-ipython kernel install --user --name=spatial-networks
+pip install "tysserand[all]"
 ```
-or with Conda and Mamba:
+
+For development, the environment is managed with [uv](https://docs.astral.sh/uv/):
 ```bash
-# create environment
-conda install mamba -n base -c conda-forge
-mamba env create --file environment.yml
-# add environment to jupyterlab
-conda activate spatial-networks
-ipython kernel install --user --name=spatial-networks
-```
-If you want to reproduce results in the publication, install also PySAL
-```bash
-pip install libpysal geopandas fiona shapely pyproj rtree
+git clone https://github.com/VeraPancaldiLab/tysserand.git
+cd tysserand
+uv sync --extra all   # creates .venv with tysserand installed in editable mode
+uv run pytest -q tests
+# add the environment to jupyterlab
+uv run python -m ipykernel install --user --name=spatial-networks
 ```
 
 
@@ -76,7 +68,7 @@ Each node is linked to nodes closer than a threshold distance D, that is to say 
 ### Area contact
 
 Nodes are the center of detected objects (like after cell segmentation) and they are linked if their respective areas are in contact or closer than a given distance threshold.  
-A parallelized version is implemented with the Dask library.
+A parallelized version is implemented with joblib.
 
 ![*Contacting areas* reconstruction](./images/publication_figures/simulated_segmentation_image_size-600_hole_proba-0.1_noise_sigma-10.0_objects_network.png)
 

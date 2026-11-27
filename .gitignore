@@ -5,3 +5,13 @@
 *cache*
 data
 .DS_Store
+# build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.venv/
+
+# documentation build
+site/

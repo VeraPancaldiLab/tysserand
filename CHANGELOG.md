@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.0.0 — 2026-11-27
+
+First stable release: networks are `scipy.sparse` CSR adjacency matrices throughout, the API follows semantic versioning from now on (breaking changes only in major releases).
+
+### Added
+  - `to_undirected(A, weighted=False, combine='max')`: symmetrize a network, binary or keeping edge values
+  - `is_directed(A)`: whether an adjacency matrix is asymmetric
+  - type hints on the whole public API
+  - API documentation site (mkdocs + mkdocstrings): `uv sync --group docs`, then `uv run mkdocs serve`
+  - `random_state` argument of `make_random_nodes`, `make_random_tiles` and `build_knn` (approximate search) for reproducible results; they no longer use numpy's global random state
+
+### Changed
+  - `remove_duplicate_pairs`, `merge_pairs`, `pairs_to_df` and `score_method` take CSR adjacency matrices; edge-list arrays are deprecated (`DeprecationWarning`)
+  - `remove_duplicate_pairs` is deprecated in favor of `to_undirected` (CSR networks have no duplicate edges)
+  - `merge_pairs` keeps edge directions, and edge values with `weighted=True` (`combine='max'` or `'sum'`)
+  - `pairs_to_df` can export edge values (weights, distances) with `weight='column_name'`, exports every edge of directed networks (`directed=None` detects them, previously edges of the lower triangle were dropped) and keeps self-loops
+  - `csr_to_edge_pairs` and `csr_to_edge_coords` return every edge of directed networks (`directed=None` detects them, previously edges of the lower triangle were dropped); `csr_to_edge_pairs` keeps self-loops and ignores non-coalesced duplicates
+  - `link_solitaries` keeps the values and directions of existing edges (they were binarized and symmetrized); new edges are undirected with a value of 1
+  - packaging: single PEP 621 `pyproject.toml` managed with uv (Poetry and `setup.py` removed); requires Python >= 3.10; `napari`, `ipykernel`, `qtconsole` and `pathlib` are no longer core dependencies (`napari` is an extra, along with `interop`, `notebooks` and `all`); unused `hdbscan` and `umap-learn` removed
+  - code split into submodules (`build`, `contacting`, `convert`, `distances`, `io`, `plot`, `interop`, `annotation`, `scoring`, `generators`), all public functions available from `import tysserand as ty`
+  - heavy libraries (napari, OpenCV, scikit-image, scikit-learn, pynndescent, matplotlib, seaborn) are imported only when used: `import tysserand` drops from ~1.4 s / ~360 MB to ~0.3 s / ~130 MB
+  - `build_contacting_parallel` uses joblib instead of Dask (Dask is no longer a dependency) and returns a CSR adjacency matrix identical to `build_contacting`
+
+### Development
+  - code linted and formatted with ruff (`uv run ruff check .`, `uv run ruff format .`), pre-commit hooks (`uv run pre-commit install`) and GitHub Actions running the linters, the tests (Python 3.10 and 3.12) and the documentation build
+
+### Deprecated
+  - `from tysserand import tysserand as ty`: use `import tysserand as ty`; the `tysserand.tysserand` module still re-exports the whole API but emits a `FutureWarning` and will be removed in v2.0
+
+### Fixed
+  - `link_solitaries` with a network missing trailing isolated nodes, or with self-loops
+  - `score_method` docstring: it returns 3 rates
+  - tiling of `build_contacting_parallel` (1 or 2 splits, non power-of-4 splits, non-square images)
+  - `build_contacting_nn` with CSR networks
+  - `add_to_AnnData` failing when distances `D` are not provided
+  - `choose_optimal_image_split` no longer computes the unused number of objects of the whole image
+  - `build_contacting` silently dropped edges between objects sharing many contacting pixels (int8 overflow when summing duplicate contacts)
+
 ## v0.6.0
 
 ### Added
